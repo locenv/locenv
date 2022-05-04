@@ -1,0 +1,5 @@
+{
+  "editor.rulers": [160],
+  "files.insertFinalNewline": true,
+  "files.trimFinalNewlines": true
+}
