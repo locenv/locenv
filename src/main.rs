@@ -1,21 +1,56 @@
-use clap::{command, Command};
-
+mod command;
 mod up;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Parse arguments.
-    let args = command!()
-        .subcommand(
-            Command::new("up").about("Start all services"),
-        )
-        .subcommand_required(true)
-        .get_matches();
+fn main() {
+    std::process::exit(run())
+}
 
-    // Handle sub-commands.
-    if let Some(cmd) = args.subcommand_matches("up") {
-        up::run().await?
+fn run() -> i32 {
+    // Set up commands.
+    let commands = [
+        up::command()
+    ];
+
+    // Parse arguments.
+    let args = parse_command_line(&commands);
+
+    // Set up Tokio.
+    let tokio = match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("Failed to setup runtime: {}", e);
+            return 1
+        }
+    };
+
+    // Run command.
+    match tokio.block_on(async { process_command(&commands, &args).await }) {
+        Ok(_) => 0,
+        Err(e) => {
+            eprintln!("{}", e);
+            1
+        }
+    }
+}
+
+fn parse_command_line(commands: &[command::Command]) -> clap::ArgMatches {
+    let mut args = clap::command!().subcommand_required(true);
+
+    for command in commands {
+        args = args.subcommand((command.specs)(command.name));
     }
 
-    Ok(())
+    args.get_matches()
+}
+
+async fn process_command<'args>(commands: &[command::Command<'args>], args: &'args clap::ArgMatches) -> Result<(), String> {
+    for command in commands {
+        if let Some(cmd) = args.subcommand_matches(command.name) {
+            (command.run)(cmd).await?;
+            break;
+        }
+    }
+
+    // This should never happen.
+    panic!()
 }
