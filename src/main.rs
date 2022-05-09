@@ -1,4 +1,5 @@
 mod command;
+mod scp;
 mod up;
 
 fn main() {
