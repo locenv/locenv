@@ -48,7 +48,7 @@ async fn process_command<'args>(commands: &[command::Command<'args>], args: &'ar
     for command in commands {
         if let Some(cmd) = args.subcommand_matches(command.name) {
             (command.run)(cmd).await?;
-            break;
+            return Ok(());
         }
     }
 
