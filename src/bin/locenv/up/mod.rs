@@ -14,10 +14,35 @@ pub fn command<'args>() -> Command<'args> {
     }
 }
 
-async fn run(context: &Context, _: &ArgMatches) -> Result<(), String> {
-    let config = load_config(context.path.join("locenv-services.yml"))?;
+async fn run(ctx: &Context, _: &ArgMatches) -> Result<(), String> {
+    // Check if services already running.
+    if is_running(ctx)? {
+        return Err(String::from("The services already running"));
+    }
+
+    // Load config.
+    let config = load_config(ctx.path.join("locenv-services.yml"))?;
 
     Ok(())
+}
+
+fn is_running(ctx: &Context) -> Result<bool, String> {
+    let mut port = ctx.path.join(".locenv");
+
+    port.push("service-manager");
+    port.push("port");
+
+    match std::fs::metadata(&port) {
+        Ok(r) => if r.is_file() {
+            Ok(true)
+        } else {
+            Err(format!("Unexpected file type for {}", port.display()))
+        },
+        Err(e) => match e.kind() {
+            std::io::ErrorKind::NotFound => Ok(false),
+            _ => Err(format!("Failed to get metadata of {}: {}", port.display(), e))
+        }
+    }
 }
 
 fn load_config<P: AsRef<Path>>(path: P) -> Result<Services, String> {
