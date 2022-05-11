@@ -1,19 +1,21 @@
-use config::Services;
 use crate::command::Command;
+use crate::context::Context;
+use clap::ArgMatches;
+use config::Services;
 use std::{fs::File, path::Path};
 
 mod config;
 
 pub fn command<'args>() -> Command<'args> {
-    Command{
+    Command {
         name: "up",
-        specs: |name| { clap::Command::new(name).about("Start all services") },
-        run: |args| { Box::pin(run(args)) }
+        specs: |name| clap::Command::new(name).about("Start all services"),
+        run: |context, args| Box::pin(run(context, args)),
     }
 }
 
-async fn run(_: &clap::ArgMatches) -> Result<(), String> {
-    let config = load_config("locenv-services.yml")?;
+async fn run(context: &Context, _: &ArgMatches) -> Result<(), String> {
+    let config = load_config(context.path.join("locenv-services.yml"))?;
 
     Ok(())
 }

@@ -1,8 +1,9 @@
+use crate::context::Context;
 use std::future::Future;
 use std::pin::Pin;
 
-pub struct Command<'args> {
+pub struct Command<'run> {
     pub name: &'static str,
     pub specs: fn(name: &str) -> clap::Command<'static>,
-    pub run: fn(args: &'args clap::ArgMatches) -> Pin<Box<dyn Future<Output = Result<(), String>> + 'args>>
+    pub run: fn(context: &'run Context, args: &'run clap::ArgMatches) -> Pin<Box<dyn Future<Output = Result<(), String>> + 'run>>
 }
