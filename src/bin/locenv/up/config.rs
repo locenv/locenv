@@ -1,6 +1,7 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::io::Read;
+use std::iter::IntoIterator;
 
 #[derive(Deserialize)]
 pub struct Services(HashMap<String, Service>);
@@ -32,6 +33,15 @@ pub enum RepositoryUri {
 impl Services {
     pub fn load<R: Read>(reader: R) -> Result<Self, serde_yaml::Error> {
         serde_yaml::from_reader(reader)
+    }
+}
+
+impl<'a> IntoIterator for &'a Services {
+    type Item = (&'a String, &'a Service);
+    type IntoIter = std::collections::hash_map::Iter<'a, String, Service>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
     }
 }
 

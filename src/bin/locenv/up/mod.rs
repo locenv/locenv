@@ -5,6 +5,7 @@ use config::Services;
 use std::{fs::File, path::Path};
 
 mod config;
+mod repository;
 
 pub fn command<'args>() -> Command<'args> {
     Command {
@@ -15,13 +16,20 @@ pub fn command<'args>() -> Command<'args> {
 }
 
 async fn run(ctx: &Context, _: &ArgMatches) -> Result<(), String> {
+    // Load config.
+    let conf = load_config(ctx.path.join("locenv-services.yml"))?;
+
     // Check if services already running.
     if is_running(ctx)? {
         return Err(String::from("The services already running"));
     }
 
-    // Load config.
-    let config = load_config(ctx.path.join("locenv-services.yml"))?;
+    // Update local repositories.
+    for (n, s) in &conf {
+        if let Err(e) = repository::update(&s.repository).await {
+            return Err(format!("Failed to update local repository for {}: {}", n, e));
+        }
+    }
 
     Ok(())
 }
