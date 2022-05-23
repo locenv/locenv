@@ -7,6 +7,26 @@ pub struct Url {
     pub path: Option<String>
 }
 
+impl Url {
+    pub fn into_string(&self) -> String {
+        let mut r = String::new();
+
+        if let Some(v) = &self.user {
+            r.push_str(v);
+            r.push('@');
+        }
+
+        r.push_str(&self.host);
+
+        if let Some(v) = &self.path {
+            r.push(':');
+            r.push_str(v);
+        }
+
+        r
+    }
+}
+
 impl<'de> Deserialize<'de> for Url {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         deserializer.deserialize_str(UrlVisitor)

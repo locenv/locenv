@@ -11,13 +11,13 @@ pub fn command<'args>() -> Command<'args> {
     Command {
         name: "up",
         specs: |name| clap::Command::new(name).about("Start all services"),
-        run: |context, args| Box::pin(run(context, args)),
+        run: |ctx, args| Box::pin(run(ctx, args)),
     }
 }
 
 async fn run(ctx: &Context, _: &ArgMatches) -> Result<(), String> {
     // Load config.
-    let conf = load_config(ctx.path.join("locenv-services.yml"))?;
+    let conf = load_config(ctx.project().join("locenv-services.yml"))?;
 
     // Check if services already running.
     if is_running(ctx)? {
@@ -26,7 +26,7 @@ async fn run(ctx: &Context, _: &ArgMatches) -> Result<(), String> {
 
     // Update local repositories.
     for (n, s) in &conf {
-        if let Err(e) = repository::update(&s.repository).await {
+        if let Err(e) = repository::update(ctx, n, &s.repository).await {
             return Err(format!("Failed to update local repository for {}: {}", n, e));
         }
     }
@@ -35,9 +35,8 @@ async fn run(ctx: &Context, _: &ArgMatches) -> Result<(), String> {
 }
 
 fn is_running(ctx: &Context) -> Result<bool, String> {
-    let mut port = ctx.path.join(".locenv");
+    let mut port = ctx.service_manager();
 
-    port.push("service-manager");
     port.push("port");
 
     match std::fs::metadata(&port) {
