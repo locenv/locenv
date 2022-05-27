@@ -1,5 +1,6 @@
-use command::Command;
-use context::Context;
+use self::command::Command;
+use self::context::Context;
+use std::error::Error;
 
 mod command;
 mod context;
@@ -54,11 +55,10 @@ async fn process_command<'a>(
     context: &'a Context,
     commands: &[Command<'a>],
     args: &'a clap::ArgMatches,
-) -> Result<(), String> {
+) -> Result<(), Box<dyn Error>> {
     for command in commands {
         if let Some(cmd) = args.subcommand_matches(command.name) {
-            (command.run)(context, cmd).await?;
-            return Ok(());
+            return (command.run)(context, cmd).await;
         }
     }
 
