@@ -4,7 +4,7 @@ use serde::de::{Deserialize, Deserializer, Error, Visitor};
 pub struct Url {
     pub user: Option<String>,
     pub host: String,
-    pub path: Option<String>
+    pub path: Option<String>,
 }
 
 impl Url {
@@ -83,11 +83,19 @@ impl<'de> Visitor<'de> for UrlVisitor {
                 Some(buffer)
             };
 
-            Ok(Url{ user, host: h, path: p })
+            Ok(Url {
+                user,
+                host: h,
+                path: p,
+            })
         } else if user.is_none() && !buffer.is_empty() {
             buffer.shrink_to_fit();
 
-            Ok(Url{ user: None, host: buffer, path: None })
+            Ok(Url {
+                user: None,
+                host: buffer,
+                path: None,
+            })
         } else {
             Err(E::custom("SCP-syntax is not valid"))
         }

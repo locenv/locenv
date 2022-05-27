@@ -1,3 +1,3 @@
 [workspace]
-members = ["crates/cli"]
+members = ["crates/cli", "crates/config", "crates/context", "crates/manager", "crates/repository"]
 default-members = ["crates/cli"]

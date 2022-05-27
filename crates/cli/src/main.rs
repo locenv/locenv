@@ -1,11 +1,11 @@
 use self::command::Command;
-use self::context::Context;
+use self::errors::IncorrectManagerState;
+use context::Context;
 use std::error::Error;
 
 mod command;
-mod context;
+mod errors;
 mod pull;
-mod scp;
 mod up;
 
 fn main() {
@@ -52,13 +52,19 @@ fn parse_command_line(commands: &[command::Command]) -> clap::ArgMatches {
     args.get_matches()
 }
 
-async fn process_command<'a>(
-    context: &'a Context,
-    commands: &[Command<'a>],
-    args: &'a clap::ArgMatches,
+async fn process_command<'run>(
+    context: &'run Context,
+    commands: &[Command<'run>],
+    args: &'run clap::ArgMatches,
 ) -> Result<(), Box<dyn Error>> {
     for command in commands {
         if let Some(cmd) = args.subcommand_matches(command.name) {
+            if let Some(v) = command.manager_running {
+                if manager::is_running(context) != v {
+                    return Err(IncorrectManagerState::new(v).into());
+                }
+            }
+
             return (command.run)(context, cmd).await;
         }
     }

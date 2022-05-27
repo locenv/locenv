@@ -1,0 +1,9 @@
+[package]
+name = "repository"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+config = { path = "../config" }
+dirs = "4"
+git2 = "0.14"

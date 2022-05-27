@@ -15,11 +15,6 @@ pub struct OpenRepositoryError {
 }
 
 #[derive(Debug)]
-pub struct NotGitRepository {
-    path: PathBuf,
-}
-
-#[derive(Debug)]
 pub struct FindRemoteError {
     path: PathBuf,
     remote: String,
@@ -116,22 +111,6 @@ impl Display for OpenRepositoryError {
             self.path.display(),
             self.reason
         )
-    }
-}
-
-// NotGitRepository
-
-impl NotGitRepository {
-    pub fn new(path: PathBuf) -> Self {
-        NotGitRepository { path }
-    }
-}
-
-impl Error for NotGitRepository {}
-
-impl Display for NotGitRepository {
-    fn fmt(&self, f: &mut Formatter) -> Result {
-        write!(f, "{} is not a Git repository", self.path.display())
     }
 }
 

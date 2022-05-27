@@ -14,15 +14,6 @@ pub struct ConfigParseError {
     reason: serde_yaml::Error,
 }
 
-#[derive(Debug)]
-pub struct ServiceManagerPortFileOpenError {
-    path: PathBuf,
-    reason: std::io::Error,
-}
-
-#[derive(Debug)]
-pub struct AlreadyRunning;
-
 // ConfigOpenError
 
 impl ConfigOpenError {
@@ -63,40 +54,5 @@ impl Display for ConfigParseError {
             self.path.display(),
             self.reason
         )
-    }
-}
-
-// ServiceManagerPortFileOpenError
-
-impl ServiceManagerPortFileOpenError {
-    pub fn new<P: Into<PathBuf>>(path: P, reason: std::io::Error) -> Self {
-        ServiceManagerPortFileOpenError {
-            path: path.into(),
-            reason,
-        }
-    }
-}
-
-impl Error for ServiceManagerPortFileOpenError {}
-
-impl Display for ServiceManagerPortFileOpenError {
-    fn fmt(&self, f: &mut Formatter) -> Result {
-        write!(f, "Failed to open {}: {}", self.path.display(), self.reason)
-    }
-}
-
-// AlreadyRunning
-
-impl AlreadyRunning {
-    pub fn new() -> Self {
-        AlreadyRunning {}
-    }
-}
-
-impl Error for AlreadyRunning {}
-
-impl Display for AlreadyRunning {
-    fn fmt(&self, f: &mut Formatter) -> Result {
-        write!(f, "The services already running")
     }
 }
