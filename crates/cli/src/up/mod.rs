@@ -18,11 +18,15 @@ async fn run(ctx: &Context, _: &clap::ArgMatches) -> Result<(), Box<dyn Error>> 
 
     // Create local repositories.
     for (name, service) in &conf {
+        // Build a path to repository.
         let path = ctx.repository_dir(name);
 
         if path.is_dir() {
             continue;
         }
+
+        // Download.
+        println!("Downloading {} to {}", name, path.display());
 
         repository::download(&path, &service.repository).await?;
     }
