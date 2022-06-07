@@ -4,14 +4,14 @@ use std::path::Path;
 
 mod git;
 
-pub async fn download<P: AsRef<Path>>(path: P, repo: &Repository) -> Result<(), Box<dyn Error>> {
+pub fn download<P: AsRef<Path>>(path: P, repo: &Repository) -> Result<(), Box<dyn Error>> {
     match repo.r#type {
-        RepositoryType::Git => git::download(path, &repo.uri).await,
+        RepositoryType::Git => git::download(path, &repo.uri),
     }
 }
 
-pub async fn update<P: AsRef<Path>>(path: P, repo: &Repository) -> Result<(), Box<dyn Error>> {
+pub fn update<P: AsRef<Path>>(path: P, repo: &Repository) -> Result<(), Box<dyn Error>> {
     match repo.r#type {
-        RepositoryType::Git => git::update(path).await,
+        RepositoryType::Git => git::update(path),
     }
 }

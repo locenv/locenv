@@ -8,12 +8,12 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 
-pub fn command<'run>() -> Command<'run> {
+pub fn command() -> Command {
     Command {
         name: "up",
         specs: |name| clap::Command::new(name).about("Start all services"),
         manager_running: Some(false),
-        run: |ctx, args| Box::pin(run(ctx, args)),
+        run,
     }
 }
 
@@ -31,7 +31,7 @@ enum RunError {
     BuildError(String, builder::BuildError),
 }
 
-async fn run(context: &Context, _: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
+fn run(context: &Context, _: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
     // Load config.
     let conf = Services::from_file(context.project().services_config())?;
 
@@ -50,7 +50,7 @@ async fn run(context: &Context, _: &clap::ArgMatches) -> Result<(), Box<dyn Erro
 
         if !path.is_dir() {
             println!("Downloading {} to {}", name, path.display());
-            repository::download(&path, &service.conf.repository).await?;
+            repository::download(&path, &service.conf.repository)?;
             service.state.clear();
         }
 
@@ -81,7 +81,7 @@ async fn run(context: &Context, _: &clap::ArgMatches) -> Result<(), Box<dyn Erro
             if let Some(bc) = &conf.build {
                 println!("Building {}", name);
 
-                if let Err(e) = builder::build(context, bc).await {
+                if let Err(e) = builder::build(context, bc) {
                     return Err(RunError::BuildError(name.into(), e).into());
                 }
             }

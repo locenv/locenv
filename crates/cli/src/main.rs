@@ -26,29 +26,16 @@ fn run() -> i32 {
         }
     };
 
-    // Set up Tokio.
-    let tokio = match tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-    {
-        Ok(r) => r,
-        Err(e) => {
-            eprintln!("Failed to setup runtime: {}", e);
-            return 1;
-        }
-    };
-
     // Run command.
-    match tokio.block_on(async { process_command(&context, &commands, &args).await }) {
-        Ok(_) => 0,
-        Err(e) => {
-            eprintln!("{}", e);
-            1
-        }
+    if let Err(e) = process_command(&context, &commands, &args) {
+        eprintln!("{}", e);
+        return 1;
     }
+
+    0
 }
 
-fn parse_command_line(commands: &[command::Command]) -> clap::ArgMatches {
+fn parse_command_line(commands: &[Command]) -> clap::ArgMatches {
     let mut args = clap::command!().subcommand_required(true);
 
     for command in commands {
@@ -58,10 +45,10 @@ fn parse_command_line(commands: &[command::Command]) -> clap::ArgMatches {
     args.get_matches()
 }
 
-async fn process_command<'run>(
-    context: &'run Context,
-    commands: &[Command<'run>],
-    args: &'run clap::ArgMatches,
+fn process_command(
+    context: &Context,
+    commands: &[Command],
+    args: &clap::ArgMatches,
 ) -> Result<(), Box<dyn Error>> {
     for command in commands {
         if let Some(cmd) = args.subcommand_matches(command.name) {
@@ -71,10 +58,10 @@ async fn process_command<'run>(
                 }
             }
 
-            return (command.run)(context, cmd).await;
+            return (command.run)(context, cmd);
         }
     }
 
     // This should never happen.
-    panic!()
+    panic!();
 }

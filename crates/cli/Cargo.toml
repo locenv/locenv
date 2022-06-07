@@ -5,11 +5,10 @@ edition = "2021"
 
 [dependencies]
 builder = { path = "../builder" }
-clap = { version = "3.1.15", features = ["cargo"] }
+clap = { version = "3.1", features = ["cargo"] }
 config = { path = "../config" }
 context = { path = "../context" }
 manager = { path = "../manager" }
 repository = { path = "../repository" }
 serde_yaml = "0.8"
 state = { path = "../state" }
-tokio = { version = "1", features = ["full"] }

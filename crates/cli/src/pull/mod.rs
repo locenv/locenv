@@ -3,16 +3,16 @@ use config::Services;
 use context::Context;
 use std::error::Error;
 
-pub fn command<'run>() -> Command<'run> {
+pub fn command() -> Command {
     Command {
         name: "pull",
         specs: |name| clap::Command::new(name).about("Update all services"),
         manager_running: Some(false),
-        run: |ctx, args| Box::pin(run(ctx, args)),
+        run,
     }
 }
 
-async fn run(context: &Context, _: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
+fn run(context: &Context, _: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
     // Load config.
     let conf = Services::from_file(context.project().services_config())?;
 
@@ -21,9 +21,9 @@ async fn run(context: &Context, _: &clap::ArgMatches) -> Result<(), Box<dyn Erro
         let path = context.runtime().repositories().by_name(n).path();
 
         if path.is_dir() {
-            repository::update(&path, &s.repository).await?;
+            repository::update(&path, &s.repository)?;
         } else {
-            repository::download(&path, &s.repository).await?;
+            repository::download(&path, &s.repository)?;
         }
     }
 

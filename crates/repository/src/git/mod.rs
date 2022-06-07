@@ -1,14 +1,14 @@
-use config::RepositoryUri;
 use self::errors::{
     AnnotatedCommitFromReferenceError, CheckoutError, CloneError, FetchError, FindReferenceError,
     FindRemoteError, MergeAnalysisError, OpenRepositoryError, SetHeadError, SetReferenceError,
 };
+use config::RepositoryUri;
 use std::error::Error;
 use std::path::Path;
 
 mod errors;
 
-pub async fn download<P: AsRef<Path>>(path: P, uri: &RepositoryUri) -> Result<(), Box<dyn Error>> {
+pub fn download<P: AsRef<Path>>(path: P, uri: &RepositoryUri) -> Result<(), Box<dyn Error>> {
     // Setup repo builder.
     let mut rb = git2::build::RepoBuilder::new();
     let url: String;
@@ -53,7 +53,7 @@ pub async fn download<P: AsRef<Path>>(path: P, uri: &RepositoryUri) -> Result<()
 }
 
 // https://github.com/rust-lang/git2-rs/blob/master/examples/pull.rs
-pub async fn update<P: AsRef<Path>>(path: P) -> Result<(), Box<dyn Error>> {
+pub fn update<P: AsRef<Path>>(path: P) -> Result<(), Box<dyn Error>> {
     // Open repository.
     let repo = match git2::Repository::open(&path) {
         Ok(r) => r,

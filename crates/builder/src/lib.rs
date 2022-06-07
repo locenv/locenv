@@ -10,7 +10,7 @@ pub enum BuildError {
     MissingModule(String),
 }
 
-pub async fn build(context: &Context, conf: &BuildConfigurations) -> Result<(), BuildError> {
+pub fn build(context: &Context, conf: &BuildConfigurations) -> Result<(), BuildError> {
     for step in &conf.steps {
         let module = match Module::find(context, &step.uses) {
             Some(r) => r,
