@@ -18,7 +18,13 @@ fn run() -> i32 {
 
     // Parse arguments.
     let args = parse_command_line(&commands);
-    let context = Context::new(std::env::current_dir().unwrap());
+    let context = match Context::new(std::env::current_dir().unwrap()) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("{}", e);
+            return 1;
+        }
+    };
 
     // Set up Tokio.
     let tokio = match tokio::runtime::Builder::new_multi_thread()

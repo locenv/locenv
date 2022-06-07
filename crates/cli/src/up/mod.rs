@@ -1,7 +1,12 @@
 use crate::command::Command;
-use config::Services;
+use config::service::PlatformConfigurations;
+use config::{FromFileError, Services};
 use context::Context;
+use state::StateManager;
+use std::collections::HashMap;
 use std::error::Error;
+use std::fmt::{Display, Formatter};
+use std::path::PathBuf;
 
 pub fn command<'run>() -> Command<'run> {
     Command {
@@ -12,24 +17,95 @@ pub fn command<'run>() -> Command<'run> {
     }
 }
 
-async fn run(ctx: &Context, _: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
+struct Service<'context, 'config, 'repo, 'state> {
+    conf: &'config config::services::Service,
+    repo: context::runtime::repositories::repository::Repository<'context, 'repo>,
+    state: StateManager<'context, 'state>,
+}
+
+#[derive(Debug)]
+enum RunError {
+    PlatformNotSupported(String),
+    ServiceDefinitionOpenError(PathBuf, std::io::Error),
+    ServiceDefinitionParseError(PathBuf, serde_yaml::Error),
+    BuildError(String, builder::BuildError),
+}
+
+async fn run(context: &Context, _: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
     // Load config.
-    let conf = Services::from_file(ctx.services_config())?;
+    let conf = Services::from_file(context.project().services_config())?;
 
-    // Create local repositories.
-    for (name, service) in &conf {
-        // Build a path to repository.
-        let path = ctx.repository_dir(name);
+    // Download repositories.
+    let mut services: HashMap<&str, Service> = HashMap::new();
 
-        if path.is_dir() {
-            continue;
-        }
+    for (name, conf) in &conf {
+        let service = Service {
+            conf,
+            repo: context.runtime().repositories().by_name(name),
+            state: StateManager::new(context.runtime().states().by_name(name)),
+        };
 
         // Download.
-        println!("Downloading {} to {}", name, path.display());
+        let path = service.repo.path();
 
-        repository::download(&path, &service.repository).await?;
+        if !path.is_dir() {
+            println!("Downloading {} to {}", name, path.display());
+            repository::download(&path, &service.conf.repository).await?;
+            service.state.clear();
+        }
+
+        services.insert(name, service);
+    }
+
+    // Build & run.
+    for (name, service) in services {
+        // Load service definition.
+        let def = service.repo.service_definition();
+        let conf = match PlatformConfigurations::from_service_definition_file(&def) {
+            Ok(r) => match r {
+                Some(v) => v,
+                None => return Err(RunError::PlatformNotSupported(name.into()).into()),
+            },
+            Err(e) => match e {
+                FromFileError::OpenFailed(e) => {
+                    return Err(RunError::ServiceDefinitionOpenError(def, e).into())
+                }
+                FromFileError::ParseFailed(e) => {
+                    return Err(RunError::ServiceDefinitionParseError(def, e).into())
+                }
+            },
+        };
+
+        // Build.
+        if service.state.read_built_time().is_none() {
+            if let Some(bc) = &conf.build {
+                println!("Building {}", name);
+
+                if let Err(e) = builder::build(context, bc).await {
+                    return Err(RunError::BuildError(name.into(), e).into());
+                }
+            }
+        }
     }
 
     Ok(())
+}
+
+// RunError
+
+impl Error for RunError {}
+
+impl Display for RunError {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            Self::PlatformNotSupported(s) => write!(f, "Service {} cannot run on this system", s),
+            Self::ServiceDefinitionOpenError(p, e) => {
+                write!(f, "Failed to open {}: {}", p.display(), e)
+            }
+            Self::ServiceDefinitionParseError(p, e) => {
+                write!(f, "Failed to parse {}: {}", p.display(), e)
+            }
+            Self::BuildError(s, e) => write!(f, "Failed to build {}: {}", s, e),
+        }
+    }
 }

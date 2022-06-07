@@ -12,13 +12,13 @@ pub fn command<'run>() -> Command<'run> {
     }
 }
 
-async fn run(ctx: &Context, _: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
+async fn run(context: &Context, _: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
     // Load config.
-    let conf = Services::from_file(ctx.services_config())?;
+    let conf = Services::from_file(context.project().services_config())?;
 
     // Update local repositories.
     for (n, s) in &conf {
-        let path = ctx.repository_dir(n);
+        let path = context.runtime().repositories().by_name(n).path();
 
         if path.is_dir() {
             repository::update(&path, &s.repository).await?;

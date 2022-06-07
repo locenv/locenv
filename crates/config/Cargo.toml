@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+config-macros = { path = "../config-macros" }
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.8"
 url = { version = "2", features = ["serde"] }
