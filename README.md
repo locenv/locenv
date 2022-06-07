@@ -20,6 +20,12 @@ sample-c:
 locenv up
 ```
 
+### Update services to latest version
+
+```sh
+locenv pull
+```
+
 ## License
 
 MIT
