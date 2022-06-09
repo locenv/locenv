@@ -1,7 +1,6 @@
 use crate::FromFileError;
 use config_macros::Config;
 use serde::Deserialize;
-use std::collections::HashMap;
 use std::path::Path;
 
 #[derive(Config, Deserialize)]
@@ -13,19 +12,7 @@ pub struct ServiceDefinition {
 
 #[derive(Clone, Deserialize)]
 pub struct PlatformConfigurations {
-    pub build: Option<BuildConfigurations>,
-}
-
-#[derive(Clone, Deserialize)]
-pub struct BuildConfigurations {
-    pub steps: Vec<BuildStep>,
-}
-
-#[derive(Clone, Deserialize)]
-pub struct BuildStep {
-    pub uses: String,
-    pub name: Option<String>,
-    pub with: Option<HashMap<String, String>>,
+    pub build: Option<String>,
 }
 
 // ServiceConfigurations

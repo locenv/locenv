@@ -28,7 +28,7 @@ enum RunError {
     PlatformNotSupported(String),
     ServiceDefinitionOpenError(PathBuf, std::io::Error),
     ServiceDefinitionParseError(PathBuf, serde_yaml::Error),
-    BuildError(String, builder::BuildError),
+    BuildError(String, script::RunError),
 }
 
 fn run(context: &Context, _: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
@@ -78,10 +78,12 @@ fn run(context: &Context, _: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
 
         // Build.
         if service.state.read_built_time().is_none() {
-            if let Some(bc) = &conf.build {
+            if let Some(script) = &conf.build {
+                let mut engine = script::Engine::new();
+
                 println!("Building {}", name);
 
-                if let Err(e) = builder::build(context, bc) {
+                if let Err(e) = engine.run(&script) {
                     return Err(RunError::BuildError(name.into(), e).into());
                 }
             }

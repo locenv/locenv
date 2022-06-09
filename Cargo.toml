@@ -1,13 +1,14 @@
 [workspace]
 members = [
-    "crates/builder",
     "crates/cli",
     "crates/config",
     "crates/config-macros",
     "crates/context",
+    "crates/lua",
     "crates/manager",
     "crates/module",
     "crates/repository",
+    "crates/script",
     "crates/state",
 ]
 

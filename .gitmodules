@@ -1,0 +1,3 @@
+[submodule "crates/lua/lib/lua"]
+	path = crates/lua/lib/lua
+	url = https://github.com/lua/lua.git
