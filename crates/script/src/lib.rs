@@ -36,12 +36,7 @@ impl Engine {
     pub fn run(&mut self, script: &str) -> Result<(), RunError> {
         // Load script.
         let lua = CString::new(script).unwrap();
-        let len = lua.as_bytes_with_nul().len() - 1; // Don't known why CString does not provide len().
-        let name = CString::new("main").unwrap();
-        let mode = CString::new("t").unwrap();
-        let status = unsafe {
-            lua::luaL_loadbufferx(self.lua, lua.as_ptr(), len, name.as_ptr(), mode.as_ptr())
-        };
+        let status = unsafe { lua::luaL_loadstring(self.lua, lua.as_ptr()) };
 
         if status != LUA_OK {
             return Err(RunError::LoadError(lua::pop_string(self.lua).unwrap()));
