@@ -21,8 +21,10 @@ fn run(context: &Context, _: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
         let path = context.runtime().repositories().by_name(n).path();
 
         if path.is_dir() {
+            println!("Updating {}...", n);
             repository::update(&path, &s.repository)?;
         } else {
+            println!("Downloading {}...", n);
             repository::download(&path, &s.repository)?;
         }
     }
