@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 context = { path = "../context" }
+libloading = "0.7"

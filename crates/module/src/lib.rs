@@ -1,6 +1,9 @@
 use context::Context;
 use std::path::{Path, PathBuf};
 
+pub mod definition;
+pub mod instance;
+
 pub struct Module {
     path: PathBuf,
 }
