@@ -7,4 +7,3 @@ edition = "2021"
 config = { path = "../config" }
 context = { path = "../context" }
 libloading = "0.7"
-lua = { path = "../lua" }

@@ -326,7 +326,6 @@ dependencies = [
  "config",
  "context",
  "libloading",
- "lua",
 ]
 
 [[package]]
