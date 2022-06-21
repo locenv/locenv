@@ -12,6 +12,12 @@ impl<'context, 'name> Module<'context, 'name> {
         Module { parent, name }
     }
 
+    pub fn definition(&self) -> PathBuf {
+        let mut p = self.path();
+        p.push("locenv-module.yml");
+        p
+    }
+
     pub fn path(&self) -> PathBuf {
         let mut p = self.parent.path();
         p.push(self.name.as_ref());

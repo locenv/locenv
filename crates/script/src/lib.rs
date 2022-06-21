@@ -1,10 +1,14 @@
+use context::Context;
 use lua::LUA_OK;
+use module::Module;
 use std::error::Error;
 use std::ffi::CString;
 use std::fmt::{Display, Formatter};
+use std::marker::PhantomData;
 
-pub struct Engine {
+pub struct Engine<'context> {
     lua: *mut lua::lua_State,
+    phantom: PhantomData<&'context mut lua::lua_State>,
 }
 
 #[derive(Debug)]
@@ -16,21 +20,38 @@ pub enum RunError {
 
 // Engine
 
-impl Engine {
-    pub fn new() -> Self {
+impl<'context> Engine<'context> {
+    pub fn new(context: &'context Context) -> Self {
         // Allocate state.
-        let lua = unsafe { lua::luaL_newstate() };
+        let l = unsafe { lua::luaL_newstate() };
 
-        if lua.is_null() {
+        if l.is_null() {
             panic!("Failed to create Lua engine due to insufficient memory");
         }
 
-        // Enable core libraries.
-        unsafe {
-            lua::luaopen_base(lua);
+        // Setup base library.
+        unsafe { lua::luaopen_base(l) };
+
+        // Setup package library.
+        unsafe { lua::luaopen_package(l) };
+        lua::get_field(l, -1, "searchers");
+
+        for i in (2..=4).rev() {
+            // Remove all package.searchers except the first one.
+            unsafe { lua::lua_pushnil(l) };
+            unsafe { lua::lua_seti(l, -2, i) };
         }
 
-        Engine { lua }
+        unsafe { lua::lua_pushlightuserdata(l, context as *const _ as *mut lua::c_void) };
+        unsafe { lua::lua_pushcclosure(l, Self::module_searcher, 1) };
+        unsafe { lua::lua_seti(l, -2, 2) };
+
+        lua::pop(l, 1);
+
+        Engine {
+            lua: l,
+            phantom: PhantomData,
+        }
     }
 
     pub fn run(&mut self, script: &str) -> Result<(), RunError> {
@@ -51,9 +72,28 @@ impl Engine {
 
         Ok(())
     }
+
+    unsafe extern "C" fn module_searcher(l: *mut lua::lua_State) -> lua::c_int {
+        let context = &*(lua::lua_topointer(l, lua::LUA_REGISTRYINDEX - 1) as *const Context);
+        let name = lua::check_string(l, 1).unwrap();
+
+        // Find the module.
+        let module = match Module::find(context, &name) {
+            Ok(r) => r,
+            Err(e) => match e {
+                module::FindError::NotFound(d) => {
+                    lua::push_string(l, &format!("no file '{}'", d.display()));
+                    return 1;
+                }
+            },
+        };
+
+        lua::lua_pushnil(l);
+        1
+    }
 }
 
-impl Drop for Engine {
+impl<'context> Drop for Engine<'context> {
     fn drop(&mut self) {
         unsafe { lua::lua_close(self.lua) };
     }

@@ -79,7 +79,7 @@ fn run(context: &Context, _: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
         // Build.
         if service.state.read_built_time().is_none() {
             if let Some(script) = &conf.build {
-                let mut engine = script::Engine::new();
+                let mut engine = script::Engine::new(context);
 
                 println!("Building {}", name);
 
