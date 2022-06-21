@@ -81,8 +81,25 @@ impl<'context> Engine<'context> {
         let module = match Module::find(context, &name) {
             Ok(r) => r,
             Err(e) => match e {
-                module::FindError::NotFound(d) => {
-                    lua::push_string(l, &format!("no file '{}'", d.display()));
+                module::FindError::DefinitionLoadError { file, error } => match error {
+                    config::FromFileError::OpenFailed(e) => {
+                        lua::push_string(l, &format!("cannot open {}: {}", file.display(), e));
+                        return 1;
+                    }
+                    config::FromFileError::ParseFailed(e) => {
+                        lua::push_string(l, &format!("cannot parse {}: {}", file.display(), e));
+                        return 1;
+                    }
+                },
+            },
+        };
+
+        // Load the module.
+        let instance = match module.load() {
+            Ok(r) => r,
+            Err(e) => match e {
+                module::instance::LoadError::LibraryLoadError(f, e) => {
+                    lua::push_string(l, &format!("cannot load {}: {}", f.display(), e));
                     return 1;
                 }
             },

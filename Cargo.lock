@@ -323,8 +323,10 @@ checksum = "a3e378b66a060d48947b590737b30a1be76706c8dd7b8ba0f2fe3989c68a853f"
 name = "module"
 version = "0.1.0"
 dependencies = [
+ "config",
  "context",
  "libloading",
+ "lua",
 ]
 
 [[package]]
@@ -430,6 +432,7 @@ checksum = "f3f6f92acf49d1b98f7a81226834412ada05458b7364277387724a237f062695"
 name = "script"
 version = "0.1.0"
 dependencies = [
+ "config",
  "context",
  "lua",
  "module",

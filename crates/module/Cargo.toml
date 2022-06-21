@@ -4,5 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+config = { path = "../config" }
 context = { path = "../context" }
 libloading = "0.7"
+lua = { path = "../lua" }
