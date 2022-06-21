@@ -5,6 +5,7 @@ use std::error::Error;
 
 mod command;
 mod errors;
+mod r#mod;
 mod pull;
 mod up;
 
@@ -14,7 +15,7 @@ fn main() {
 
 fn run() -> i32 {
     // Set up commands.
-    let commands = [pull::command(), up::command()];
+    let commands = [r#mod::command(), pull::command(), up::command()];
 
     // Parse arguments.
     let args = parse_command_line(&commands);
