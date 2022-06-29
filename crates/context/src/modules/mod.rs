@@ -18,6 +18,10 @@ impl<'context> Modules<'context> {
         Module::new(self, Cow::Borrowed(name))
     }
 
+    pub fn by_owned<'name, N: Into<String>>(self, name: N) -> Module<'context, 'name> {
+        Module::new(self, Cow::Owned(name.into()))
+    }
+
     pub fn path(&self) -> PathBuf {
         self.prefix.join(self.name)
     }

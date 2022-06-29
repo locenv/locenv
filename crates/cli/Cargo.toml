@@ -8,6 +8,7 @@ clap = { version = "3.2", features = ["cargo"] }
 config = { path = "../config" }
 context = { path = "../context" }
 manager = { path = "../manager" }
+module = { path = "../module" }
 repository = { path = "../repository" }
 script = { path = "../script" }
 serde_yaml = "0.8"

@@ -4,6 +4,7 @@ members = [
     "crates/config",
     "crates/config-macros",
     "crates/context",
+    "crates/http",
     "crates/lua",
     "crates/manager",
     "crates/module",

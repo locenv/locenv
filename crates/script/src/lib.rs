@@ -81,13 +81,13 @@ impl<'context> Engine<'context> {
         let module = match Module::find(context, &name) {
             Ok(r) => r,
             Err(e) => match e {
-                module::FindError::DefinitionLoadError { file, error } => match error {
+                module::FindError::LoadDefinitionFailed(f, e) => match e {
                     config::FromFileError::OpenFailed(e) => {
-                        lua::push_string(l, &format!("cannot open {}: {}", file.display(), e));
+                        lua::push_string(l, &format!("cannot open {}: {}", f.display(), e));
                         return 1;
                     }
                     config::FromFileError::ParseFailed(e) => {
-                        lua::push_string(l, &format!("cannot parse {}: {}", file.display(), e));
+                        lua::push_string(l, &format!("cannot parse {}: {}", f.display(), e));
                         return 1;
                     }
                 },

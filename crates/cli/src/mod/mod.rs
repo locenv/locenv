@@ -1,9 +1,8 @@
 use super::command::Command;
 use clap::{value_parser, Arg};
 use context::Context;
+use module::{Module, PackageId};
 use std::error::Error;
-
-mod install;
 
 pub fn command() -> Command {
     Command {
@@ -16,10 +15,10 @@ pub fn command() -> Command {
 
 fn specs(name: &str) -> clap::Command<'static> {
     let install = clap::Command::new("install").about("Install a module").arg(
-        Arg::new("spec")
-            .help("Module specifications (e.g. gh:locenv/autoconf)")
+        Arg::new("id")
+            .help("Package identifier (e.g. github:locenv/autoconf)")
             .required(true)
-            .value_parser(value_parser!(self::install::Spec)),
+            .value_parser(value_parser!(PackageId)),
     );
     let update = clap::Command::new("update").about("Update installed module(s)");
 
@@ -30,12 +29,14 @@ fn specs(name: &str) -> clap::Command<'static> {
         .subcommand(update)
 }
 
-fn run(_: &Context, args: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
+fn run(context: &Context, args: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
     if let Some(i) = args.subcommand_matches("install") {
-        let spec: &self::install::Spec = i.get_one("spec").unwrap();
+        let id: &PackageId = i.get_one("id").unwrap();
 
-        self::install::run(spec)
+        Module::install(context, id)?;
     } else {
         panic!("Sub-command not implemented")
     }
+
+    Ok(())
 }
