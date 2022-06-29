@@ -42,8 +42,7 @@ impl<'context> Engine<'context> {
             unsafe { lua::lua_seti(l, -2, i) };
         }
 
-        unsafe { lua::lua_pushlightuserdata(l, context as *const _ as *mut lua::c_void) };
-        unsafe { lua::lua_pushcclosure(l, Self::module_searcher, 1) };
+        lua::push_closure(l, |l| Self::module_searcher(l, context));
         unsafe { lua::lua_seti(l, -2, 2) };
 
         lua::pop(l, 1);
@@ -73,8 +72,7 @@ impl<'context> Engine<'context> {
         Ok(())
     }
 
-    unsafe extern "C" fn module_searcher(l: *mut lua::lua_State) -> lua::c_int {
-        let context = &*(lua::lua_topointer(l, lua::LUA_REGISTRYINDEX - 1) as *const Context);
+    fn module_searcher(l: *mut lua::lua_State, context: &Context) -> lua::c_int {
         let name = lua::check_string(l, 1).unwrap();
 
         // Find the module.
@@ -105,7 +103,7 @@ impl<'context> Engine<'context> {
             },
         };
 
-        lua::lua_pushnil(l);
+        unsafe { lua::lua_pushnil(l) };
         1
     }
 }
