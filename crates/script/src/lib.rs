@@ -15,7 +15,6 @@ pub struct Engine<'context> {
 pub enum RunError {
     LoadError(String),
     ExecError(String),
-    MissingModule(String),
 }
 
 // Engine
@@ -123,9 +122,6 @@ impl Display for RunError {
         match self {
             Self::LoadError(e) => write!(f, "Failed to load script: {}", e),
             Self::ExecError(e) => write!(f, "Failed to execute script: {}", e),
-            Self::MissingModule(name) => {
-                write!(f, "This system does not have module '{}' installed", name)
-            }
         }
     }
 }

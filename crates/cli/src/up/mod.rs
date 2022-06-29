@@ -28,7 +28,7 @@ enum RunError {
     PlatformNotSupported(String),
     ServiceDefinitionOpenError(PathBuf, std::io::Error),
     ServiceDefinitionParseError(PathBuf, serde_yaml::Error),
-    BuildError(String, script::RunError),
+    BuildError(String, String),
 }
 
 fn run(context: &Context, _: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
@@ -84,7 +84,12 @@ fn run(context: &Context, _: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
                 println!("Building {}", name);
 
                 if let Err(e) = engine.run(&script) {
-                    return Err(RunError::BuildError(name.into(), e).into());
+                    let msg = match e {
+                        script::RunError::LoadError(m) => m,
+                        script::RunError::ExecError(m) => m,
+                    };
+
+                    return Err(RunError::BuildError(name.into(), msg).into());
                 }
             }
         }
@@ -107,7 +112,7 @@ impl Display for RunError {
             Self::ServiceDefinitionParseError(p, e) => {
                 write!(f, "Failed to parse {}: {}", p.display(), e)
             }
-            Self::BuildError(s, e) => write!(f, "Failed to build {}: {}", s, e),
+            Self::BuildError(_, e) => write!(f, "{}", e),
         }
     }
 }
