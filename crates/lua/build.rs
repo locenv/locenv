@@ -44,6 +44,10 @@ fn main() {
 
     b.cpp(true); // Use C++ exception instead of setjmp/longjmp when error.
 
+    if b.get_compiler().is_like_msvc() {
+        b.flag("/TP"); // cc does not do this for us
+    }
+
     if cfg!(target_os = "linux") {
         b.define("LUA_USE_LINUX", None);
     } else if cfg!(target_os = "macos") {
@@ -56,17 +60,14 @@ fn main() {
     b.compile("lua");
 
     // Generate Lua binding.
-    let mut b = bindgen::Builder::default()
+    let b = bindgen::Builder::default()
         .clang_args(["-x", "c++"])
         .header("lib/lua/lua.h")
         .header("lib/lua/lauxlib.h")
         .header("lib/lua/lualib.h")
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks));
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+        .generate()
+        .unwrap();
 
-    if cfg!(target_os = "windows") {
-        // On Windows somehow Lua is building with GNU but bindgen generate for MSVC.
-        b = b.clang_arg("--target=x86_64-pc-windows-gnu");
-    }
-
-    b.generate().unwrap().write_to_file(PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("lua.rs")).unwrap();
+    b.write_to_file(PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("lua.rs")).unwrap();
 }
