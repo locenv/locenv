@@ -1,5 +1,4 @@
 use context::Context;
-use lua::LUA_OK;
 use module::Module;
 use std::error::Error;
 use std::ffi::CString;
@@ -57,14 +56,14 @@ impl<'context> Engine<'context> {
         let lua = CString::new(script).unwrap();
         let status = unsafe { lua::luaL_loadstring(self.lua, lua.as_ptr()) };
 
-        if status != LUA_OK {
+        if status != 0 {
             return Err(RunError::LoadError(lua::pop_string(self.lua).unwrap()));
         }
 
         // Run script.
         let status = unsafe { lua::lua_pcallk(self.lua, 0, 0, 0, 0, None) };
 
-        if status != LUA_OK {
+        if status != 0 {
             return Err(RunError::ExecError(lua::pop_string(self.lua).unwrap()));
         }
 

@@ -1,6 +1,7 @@
 # Local Environment
 
-This is a cross-platform tool to spinup services for development from a unified configuration file similar to Docker Compose but the services run directly on the host instead of container. Thus no virtual machine is required on macOS and Windows.
+This is a cross-platform tool to spinup services for development from a unified configuration file similar to Docker Compose but the services run directly on
+the host instead of container. Thus no virtual machine is required on macOS and Windows.
 
 ## Usage
 
@@ -25,6 +26,13 @@ locenv up
 ```sh
 locenv pull
 ```
+
+## Script & module limitations
+
+- Coroutines is not supported due to it use `longjmp`, which causes Rust objects to leak.
+  See [here](https://stackoverflow.com/questions/34303507/lua-coroutines-setjmp-longjmp-clobbering) for detailed information.
+- Lua error does not handled properly until [this](https://github.com/rust-lang/rust/issues/74990) completed. However we still recommended to use the standard
+  Lua error to raise the error.
 
 ## License
 
