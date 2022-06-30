@@ -56,15 +56,17 @@ fn main() {
     b.compile("lua");
 
     // Generate Lua binding.
-    let b = bindgen::Builder::default()
+    let mut b = bindgen::Builder::default()
         .clang_args(["-x", "c++"])
-        .clang_arg(&format!("--target={}", std::env::var("TARGET").unwrap()))
         .header("lib/lua/lua.h")
         .header("lib/lua/lauxlib.h")
         .header("lib/lua/lualib.h")
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
-        .generate()
-        .unwrap();
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks));
 
-    b.write_to_file(PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("lua.rs")).unwrap();
+    if cfg!(target_os = "windows") {
+        // On Windows somehow Lua is building with GNU but bindgen generate for MSVC.
+        b = b.clang_arg("--target=x86_64-pc-windows-gnu");
+    }
+
+    b.generate().unwrap().write_to_file(PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("lua.rs")).unwrap();
 }
