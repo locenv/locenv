@@ -58,6 +58,7 @@ fn main() {
     // Generate Lua binding.
     let b = bindgen::Builder::default()
         .clang_args(["-x", "c++"])
+        .clang_arg(&format!("--target={}", std::env::var("TARGET").unwrap()))
         .header("lib/lua/lua.h")
         .header("lib/lua/lauxlib.h")
         .header("lib/lua/lualib.h")
