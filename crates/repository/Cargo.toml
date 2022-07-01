@@ -6,4 +6,4 @@ edition = "2021"
 [dependencies]
 config = { path = "../config" }
 dirs = "4"
-git2 = "0.14"
+git2 = { version = "0.14", features = ["ssh", "https", "vendored-libgit2", "ssh_key_from_memory"] }
