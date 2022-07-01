@@ -3,6 +3,7 @@ use config::service::PlatformConfigurations;
 use config::{FromFileError, Services};
 use context::Context;
 use state::StateManager;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
@@ -41,8 +42,11 @@ fn run(context: &Context, _: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
     for (name, conf) in &conf {
         let service = Service {
             conf,
-            repo: context.runtime().repositories().by_name(name),
-            state: StateManager::new(context.runtime().states().by_name(name)),
+            repo: context
+                .runtime()
+                .repositories()
+                .by_name(Cow::Borrowed(name)),
+            state: StateManager::new(context.runtime().states().by_name(Cow::Borrowed(name))),
         };
 
         // Download.

@@ -1,6 +1,7 @@
 use crate::command::Command;
 use config::Services;
 use context::Context;
+use std::borrow::Cow;
 use std::error::Error;
 
 pub fn command() -> Command {
@@ -18,7 +19,11 @@ fn run(context: &Context, _: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
 
     // Update local repositories.
     for (n, s) in &conf {
-        let path = context.runtime().repositories().by_name(n).path();
+        let path = context
+            .runtime()
+            .repositories()
+            .by_name(Cow::Borrowed(n))
+            .path();
 
         if path.is_dir() {
             println!("Updating {}...", n);

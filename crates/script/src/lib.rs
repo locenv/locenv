@@ -1,5 +1,7 @@
 use context::Context;
 use module::Module;
+use std::borrow::Cow;
+use std::collections::HashMap;
 use std::error::Error;
 use std::ffi::CString;
 use std::fmt::{Display, Formatter};
@@ -7,6 +9,7 @@ use std::marker::PhantomData;
 
 pub struct Engine<'context> {
     lua: *mut lua::lua_State,
+    loaded_modules: HashMap<Module<'context, 'static>, module::instance::Instance>,
     phantom: PhantomData<&'context mut lua::lua_State>,
 }
 
@@ -21,34 +24,36 @@ pub enum RunError {
 impl<'context> Engine<'context> {
     pub fn new(context: &'context Context) -> Self {
         // Allocate state.
-        let l = unsafe { lua::luaL_newstate() };
+        let lua = unsafe { lua::luaL_newstate() };
 
-        if l.is_null() {
+        if lua.is_null() {
             panic!("Failed to create Lua engine due to insufficient memory");
         }
 
+        let mut engine = Engine {
+            lua,
+            loaded_modules: HashMap::new(),
+            phantom: PhantomData,
+        };
+
         // Setup base library.
-        unsafe { lua::luaopen_base(l) };
+        unsafe { lua::luaopen_base(lua) };
 
         // Setup package library.
-        unsafe { lua::luaopen_package(l) };
-        lua::get_field(l, -1, "searchers");
+        unsafe { lua::luaopen_package(lua) };
+        lua::get_field(lua, -1, "searchers");
 
         for i in (2..=4).rev() {
             // Remove all package.searchers except the first one.
-            unsafe { lua::lua_pushnil(l) };
-            unsafe { lua::lua_seti(l, -2, i) };
+            unsafe { lua::lua_pushnil(lua) };
+            unsafe { lua::lua_seti(lua, -2, i) };
         }
 
-        lua::push_closure(l, |l| Self::module_searcher(l, context));
-        unsafe { lua::lua_seti(l, -2, 2) };
+        lua::push_closure(lua, |lua| engine.module_searcher(lua, context));
+        unsafe { lua::lua_seti(lua, -2, 2) };
+        lua::pop(lua, 1); // Pop searchers.
 
-        lua::pop(l, 1);
-
-        Engine {
-            lua: l,
-            phantom: PhantomData,
-        }
+        engine
     }
 
     pub fn run(&mut self, script: &str) -> Result<(), RunError> {
@@ -70,39 +75,64 @@ impl<'context> Engine<'context> {
         Ok(())
     }
 
-    fn module_searcher(l: *mut lua::lua_State, context: &Context) -> lua::c_int {
-        let name = lua::check_string(l, 1).unwrap();
+    fn module_searcher(
+        &mut self,
+        lua: *mut lua::lua_State,
+        context: &'context Context,
+    ) -> lua::c_int {
+        let name = lua::check_string(lua, 1).unwrap();
 
         // Find the module.
-        let module = match Module::find(context, &name) {
+        let module = match Module::find(context, Cow::Owned(name)) {
             Ok(r) => r,
             Err(e) => match e {
                 module::FindError::LoadDefinitionFailed(f, e) => match e {
                     config::FromFileError::OpenFailed(e) => {
-                        lua::push_string(l, &format!("cannot open {}: {}", f.display(), e));
+                        lua::push_string(lua, &format!("cannot open {}: {}", f.display(), e));
                         return 1;
                     }
                     config::FromFileError::ParseFailed(e) => {
-                        lua::push_string(l, &format!("cannot parse {}: {}", f.display(), e));
+                        lua::push_string(lua, &format!("cannot parse {}: {}", f.display(), e));
                         return 1;
                     }
                 },
             },
         };
 
-        // Load the module.
+        // Load and bootstrap the module.
         let instance = match module.load() {
             Ok(r) => r,
             Err(e) => match e {
                 module::instance::LoadError::LibraryLoadError(f, e) => {
-                    lua::push_string(l, &format!("cannot load {}: {}", f.display(), e));
+                    lua::push_string(lua, &format!("cannot load {}: {}", f.display(), e));
                     return 1;
                 }
             },
         };
 
-        unsafe { lua::lua_pushnil(l) };
-        1
+        let returns = match instance.bootstrap(lua) {
+            Ok(r) => r,
+            Err(e) => match e {
+                module::instance::BootstrapError::GetFunctionFailed(f, e) => {
+                    lua::push_string(lua, &format!("cannot find exported function {}: {}", f, e));
+                    return 1;
+                }
+            },
+        };
+
+        // Keep loaded module until the engine is dropped even if the bootstrap function was failed to make sure Lue does not have a dangling pointer in some
+        // cases.
+        // TODO: Use try_insert once https://github.com/rust-lang/rust/issues/82766 is stable.
+        if self.loaded_modules.insert(module, instance).is_some() {
+            panic!("Some module was loaded twice somehow")
+        }
+
+        match returns {
+            v @ (1 | 2) => v,
+            _ => panic!(
+                "An unexpected value was returned from bootstrapping function of the loaed module"
+            ),
+        }
     }
 }
 

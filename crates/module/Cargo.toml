@@ -9,6 +9,7 @@ context = { path = "../context" }
 fs_extra = "1.2"
 http = { path = "../http" }
 libloading = "0.7"
+lua = { path = "../lua" }
 serde = "1.0"
 tempfile = "3.3"
 zip = "0.6"

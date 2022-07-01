@@ -6,9 +6,11 @@ use self::package::{InstallationScope, PackageReader, Registry};
 use config::module::ModuleDefinition;
 use context::modules::module::ModuleContent;
 use context::Context;
+use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::fs::create_dir_all;
+use std::hash::Hash;
 use std::path::Path;
 use std::path::PathBuf;
 use zip::ZipArchive;
@@ -20,8 +22,8 @@ mod github;
 mod package;
 
 pub struct Module<'context, 'name> {
-    path: PathBuf,
     definition: ModuleDefinition,
+    path: PathBuf,
     metadata: MetadataManager<'context, 'name>,
 }
 
@@ -40,7 +42,7 @@ pub enum InstallError {
 // Module
 
 impl<'context, 'name> Module<'context, 'name> {
-    pub fn find(context: &'context Context, name: &'name str) -> Result<Self, FindError> {
+    pub fn find(context: &'context Context, name: Cow<'name, str>) -> Result<Self, FindError> {
         let context = context.modules().by_name(name);
 
         // Load module definition.
@@ -51,8 +53,8 @@ impl<'context, 'name> Module<'context, 'name> {
         };
 
         Ok(Module {
-            path: context.path(),
             definition,
+            path: context.path(),
             metadata: MetadataManager::new(context.metadata()),
         })
     }
@@ -82,7 +84,9 @@ impl<'context, 'name> Module<'context, 'name> {
         let definition = ModuleDefinition::from_file(&path).unwrap();
 
         // Check if installation can be proceed.
-        let context = context.modules().by_owned(&definition.name);
+        let context = context
+            .modules()
+            .by_name(Cow::Owned(definition.name.clone()));
         let path = context.path();
 
         if path.exists() {
@@ -119,8 +123,26 @@ impl<'context, 'name> Module<'context, 'name> {
         Instance::load(self.path.join(&self.definition.file))
     }
 
+    pub fn definition(&self) -> &ModuleDefinition {
+        &self.definition
+    }
+
     pub fn path(&self) -> &Path {
         &self.path
+    }
+}
+
+impl<'context, 'name> Eq for Module<'context, 'name> {}
+
+impl<'context, 'name> Hash for Module<'context, 'name> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.definition.name.hash(state);
+    }
+}
+
+impl<'context, 'name> PartialEq for Module<'context, 'name> {
+    fn eq(&self, other: &Self) -> bool {
+        self.definition.name == other.definition.name
     }
 }
 

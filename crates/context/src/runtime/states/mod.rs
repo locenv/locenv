@@ -15,8 +15,8 @@ impl<'context> States<'context> {
         States { runtime, name }
     }
 
-    pub fn by_name<'name>(self, name: &'name str) -> State<'context, 'name> {
-        State::new(self, Cow::Borrowed(name))
+    pub fn by_name<'name>(self, name: Cow<'name, str>) -> State<'context, 'name> {
+        State::new(self, name)
     }
 
     pub fn path(&self) -> PathBuf {

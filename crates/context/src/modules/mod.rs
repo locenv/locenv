@@ -14,12 +14,8 @@ impl<'context> Modules<'context> {
         Modules { prefix, name }
     }
 
-    pub fn by_name<'name>(self, name: &'name str) -> Module<'context, 'name> {
-        Module::new(self, Cow::Borrowed(name))
-    }
-
-    pub fn by_owned<'name, N: Into<String>>(self, name: N) -> Module<'context, 'name> {
-        Module::new(self, Cow::Owned(name.into()))
+    pub fn by_name<'name>(self, name: Cow<'name, str>) -> Module<'context, 'name> {
+        Module::new(self, name)
     }
 
     pub fn path(&self) -> PathBuf {

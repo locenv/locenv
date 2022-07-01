@@ -15,8 +15,8 @@ impl<'context> Repositories<'context> {
         Repositories { runtime, name }
     }
 
-    pub fn by_name<'name>(self, name: &'name str) -> Repository<'context, 'name> {
-        Repository::new(self, Cow::Borrowed(name))
+    pub fn by_name<'name>(self, name: Cow<'name, str>) -> Repository<'context, 'name> {
+        Repository::new(self, name)
     }
 
     pub fn path(&self) -> PathBuf {
