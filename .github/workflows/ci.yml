@@ -7,12 +7,9 @@ on:
     branches:
     - main
 jobs:
-  build:
-    name: Build
-    strategy:
-      matrix:
-        os: [ubuntu-20.04, macos-11, windows-2022]
-    runs-on: ${{ matrix.os }}
+  build-linux:
+    name: Build (Linux)
+    runs-on: ubuntu-20.04
     steps:
     - name: Checkout source
       uses: actions/checkout@v3
@@ -27,5 +24,43 @@ jobs:
     - name: Upload binary
       uses: actions/upload-artifact@v3
       with:
-        name: binary
+        name: binary-linux
+        path: release
+  build-mac:
+    name: Build (macOS)
+    runs-on: macos-11
+    steps:
+    - name: Checkout source
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    - name: Build
+      run: cargo build
+    - name: Run tests
+      run: cargo test
+    - name: Prepare binary
+      run: cargo install --path crates/cli --root release
+    - name: Upload binary
+      uses: actions/upload-artifact@v3
+      with:
+        name: binary-mac
+        path: release
+  build-windows:
+    name: Build (Windows)
+    runs-on: windows-2022
+    steps:
+    - name: Checkout source
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    - name: Build
+      run: cargo build
+    - name: Run tests
+      run: cargo test
+    - name: Prepare binary
+      run: cargo install --path crates\cli --root release
+    - name: Upload binary
+      uses: actions/upload-artifact@v3
+      with:
+        name: binary-windows
         path: release
