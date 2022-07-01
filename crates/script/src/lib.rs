@@ -37,10 +37,11 @@ impl<'context> Engine<'context> {
         };
 
         // Setup base library.
-        unsafe { lua::luaopen_base(lua) };
+        unsafe { lua::luaL_requiref(lua, lua::LUA_GNAME.as_ptr() as *const _, Some(lua::luaopen_base), 1) };
+        lua::pop(lua, 1);
 
         // Setup package library.
-        unsafe { lua::luaopen_package(lua) };
+        unsafe { lua::luaL_requiref(lua, lua::LUA_LOADLIBNAME.as_ptr() as *const _, Some(lua::luaopen_package), 1) };
         lua::get_field(lua, -1, "searchers");
 
         for i in (2..=4).rev() {
