@@ -29,6 +29,7 @@ pub struct Module<'context, 'name> {
 
 #[derive(Debug)]
 pub enum FindError {
+    NotInstalled(PathBuf),
     LoadDefinitionFailed(PathBuf, config::FromFileError),
 }
 
@@ -44,17 +45,23 @@ pub enum InstallError {
 impl<'context, 'name> Module<'context, 'name> {
     pub fn find(context: &'context Context, name: Cow<'name, str>) -> Result<Self, FindError> {
         let context = context.modules().by_name(name);
+        let path = context.path();
+
+        // Check if module directory exists.
+        if !path.exists() {
+            return Err(FindError::NotInstalled(path));
+        }
 
         // Load module definition.
-        let path = context.definition();
-        let definition = match ModuleDefinition::from_file(&path) {
+        let file = context.definition();
+        let definition = match ModuleDefinition::from_file(&file) {
             Ok(r) => r,
-            Err(e) => return Err(FindError::LoadDefinitionFailed(path, e)),
+            Err(e) => return Err(FindError::LoadDefinitionFailed(file, e)),
         };
 
         Ok(Module {
             definition,
-            path: context.path(),
+            path,
             metadata: MetadataManager::new(context.metadata()),
         })
     }
@@ -153,7 +160,8 @@ impl Error for FindError {}
 impl Display for FindError {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            Self::LoadDefinitionFailed(p, e) => {
+            FindError::NotInstalled(_) => write!(f, "The module is not installed"),
+            FindError::LoadDefinitionFailed(p, e) => {
                 write!(f, "Failed to load {}: {}", p.display(), e)
             }
         }

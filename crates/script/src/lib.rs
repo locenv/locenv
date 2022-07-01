@@ -86,6 +86,10 @@ impl<'context> Engine<'context> {
         let module = match Module::find(context, Cow::Owned(name)) {
             Ok(r) => r,
             Err(e) => match e {
+                module::FindError::NotInstalled(p) => {
+                    lua::push_string(lua, &format!("the module is not installed in {}", p.display()));
+                    return 1;
+                }
                 module::FindError::LoadDefinitionFailed(f, e) => match e {
                     config::FromFileError::OpenFailed(e) => {
                         lua::push_string(lua, &format!("cannot open {}: {}", f.display(), e));
