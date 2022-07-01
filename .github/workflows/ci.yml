@@ -22,3 +22,10 @@ jobs:
       run: cargo build
     - name: Run tests
       run: cargo test
+    - name: Prepare binary
+      run: cargo install --path crates/cli --root release
+    - name: Upload binary
+      uses: actions/upload-artifact@v3
+      with:
+        name: binary
+        path: release
