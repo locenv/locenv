@@ -16,9 +16,9 @@ jobs:
       with:
         submodules: recursive
     - name: Build
-      run: cargo build
+      run: cargo build --release
     - name: Run tests
-      run: cargo test
+      run: cargo test --release
     - name: Prepare binary
       run: cargo install --path crates/cli --root release
     - name: Upload binary
@@ -35,9 +35,9 @@ jobs:
       with:
         submodules: recursive
     - name: Build
-      run: cargo build
+      run: cargo build --release
     - name: Run tests
-      run: cargo test
+      run: cargo test --release
     - name: Prepare binary
       run: cargo install --path crates/cli --root release
     - name: Upload binary
@@ -54,9 +54,9 @@ jobs:
       with:
         submodules: recursive
     - name: Build
-      run: cargo build
+      run: cargo build --release
     - name: Run tests
-      run: cargo test
+      run: cargo test --release
     - name: Prepare binary
       run: cargo install --path crates\cli --root release
     - name: Upload binary
