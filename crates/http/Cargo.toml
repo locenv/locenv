@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-curl = "0.4"
+curl = { version = "0.4", features = ["ssl", "static-curl"] }
 mime = "0.3"
 serde = "1.0"
 serde_json = "1.0"

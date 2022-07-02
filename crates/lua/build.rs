@@ -51,7 +51,8 @@ fn main() {
     if cfg!(target_os = "linux") {
         b.define("LUA_USE_LINUX", None);
 
-        // Prevent cc to append -l stdc++ due to we want to choose manually for each executable.
+        // Prevent cc to append -l stdc++ due to we want to choose it manually for each executable.
+        // https://github.com/rust-lang/cc-rs/issues/310
         std::env::set_var("CXXSTDLIB", "");
     } else if cfg!(target_os = "macos") {
         b.define("LUA_USE_MACOSX", None);
