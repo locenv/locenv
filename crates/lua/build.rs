@@ -50,6 +50,9 @@ fn main() {
 
     if cfg!(target_os = "linux") {
         b.define("LUA_USE_LINUX", None);
+
+        // Prevent cc to append -l stdc++ due to we want to choose manually for each executable.
+        std::env::set_var("CXXSTDLIB", "");
     } else if cfg!(target_os = "macos") {
         b.define("LUA_USE_MACOSX", None);
     } else if cfg!(target_os = "windows") {
