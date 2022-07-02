@@ -16,11 +16,9 @@ jobs:
       with:
         submodules: recursive
     - name: Build
-      run: cargo build --release
+      run: cargo install --path crates/cli --root release
     - name: Run tests
       run: cargo test --release
-    - name: Prepare binary
-      run: cargo install --path crates/cli --root release
     - name: Upload binary
       uses: actions/upload-artifact@v3
       with:
@@ -35,11 +33,9 @@ jobs:
       with:
         submodules: recursive
     - name: Build
-      run: cargo build --release
+      run: cargo install --path crates/cli --root release
     - name: Run tests
       run: cargo test --release
-    - name: Prepare binary
-      run: cargo install --path crates/cli --root release
     - name: Upload binary
       uses: actions/upload-artifact@v3
       with:
@@ -54,11 +50,9 @@ jobs:
       with:
         submodules: recursive
     - name: Build
-      run: cargo build --release
+      run: cargo install --path crates\cli --root release
     - name: Run tests
       run: cargo test --release
-    - name: Prepare binary
-      run: cargo install --path crates\cli --root release
     - name: Upload binary
       uses: actions/upload-artifact@v3
       with:
