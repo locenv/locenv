@@ -1,5 +1,5 @@
 use libloading::{Library, Symbol};
-use lua::{__va_list_tag, lua_CFunction, lua_Integer, lua_Number, lua_State, size_t};
+use lua::{lua_CFunction, lua_Integer, lua_Number, lua_State, size_t};
 use std::error::Error;
 use std::ffi::c_void;
 use std::fmt::{Display, Formatter};
@@ -18,7 +18,9 @@ const API_TABLE: ApiTable = ApiTable {
     lua_pushstring: lua::lua_pushstring,
     lua_pushthread: lua::lua_pushthread,
     lua_pushvalue: lua::lua_pushvalue,
-    lua_pushvfstring: lua::lua_pushvfstring,
+    lua_pushvfstring: unsafe { std::mem::transmute(lua::lua_pushvfstring as *const ()) },
+    lua_createtable: lua::lua_createtable,
+    lua_newuserdatauv: lua::lua_newuserdatauv,
 };
 
 pub struct Instance {
@@ -49,7 +51,9 @@ struct ApiTable {
     lua_pushthread: unsafe extern "C" fn(*mut lua_State) -> c_int,
     lua_pushvalue: unsafe extern "C" fn(*mut lua_State, c_int),
     lua_pushvfstring:
-        unsafe extern "C" fn(*mut lua_State, *const c_char, *mut __va_list_tag) -> *const c_char,
+        unsafe extern "C" fn(*mut lua_State, *const c_char, *mut c_void) -> *const c_char,
+    lua_createtable: unsafe extern "C" fn(*mut lua_State, c_int, c_int),
+    lua_newuserdatauv: unsafe extern "C" fn(*mut lua_State, size_t, c_int) -> *mut c_void,
 }
 
 // Instance
