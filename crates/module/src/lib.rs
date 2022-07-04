@@ -1,6 +1,5 @@
 pub use self::package::PackageId;
 
-use self::instance::{Instance, LoadError};
 use self::metadata::MetadataManager;
 use self::package::{InstallationScope, PackageReader, Registry};
 use config::module::ModuleDefinition;
@@ -15,7 +14,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use zip::ZipArchive;
 
-pub mod instance;
 pub mod metadata;
 
 mod github;
@@ -124,10 +122,6 @@ impl<'context, 'name> Module<'context, 'name> {
             definition,
             metadata,
         })
-    }
-
-    pub fn load(&self) -> Result<Instance, LoadError> {
-        Instance::load(self.path.join(&self.definition.file))
     }
 
     pub fn definition(&self) -> &ModuleDefinition {
