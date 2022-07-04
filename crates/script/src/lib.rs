@@ -7,13 +7,13 @@ use std::error::Error;
 use std::ffi::CString;
 use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
-use std::os::raw::c_int;
+use std::os::raw::{c_char, c_int};
 
 mod api;
 
 pub struct Engine<'context> {
     lua: *mut lua::lua_State,
-    loaded_modules: HashMap<Module<'context, 'static>, Option<libloading::Library>>,
+    loaded_modules: HashMap<Module<'context, 'static>, Option<NativeData>>,
     phantom: PhantomData<&'context mut lua::lua_State>,
 }
 
@@ -21,6 +21,19 @@ pub struct Engine<'context> {
 pub enum RunError {
     LoadError(String),
     ExecError(String),
+}
+
+#[allow(dead_code)]
+struct NativeData {
+    library: libloading::Library,
+    name: Box<CString>,
+    data: Box<LoaderData>,
+}
+
+#[repr(C)]
+struct LoaderData {
+    name: *const c_char,
+    api: *const api::Table,
 }
 
 // Engine
@@ -126,7 +139,7 @@ impl<'context> Engine<'context> {
         };
 
         // Load the module.
-        let library: Option<libloading::Library> = match &module.definition().program {
+        let native: Option<NativeData> = match &module.definition().program {
             config::module::Program::Script(file) => {
                 let path = module.path().join(file);
                 let file = CString::new(path.to_str().unwrap()).unwrap();
@@ -174,16 +187,24 @@ impl<'context> Engine<'context> {
                         }
                     };
 
+                    // Allocate loader data.
+                    let name = Box::new(CString::new(module.definition().name.as_str()).unwrap());
+                    let data = Box::new(LoaderData {
+                        name: name.as_ptr(),
+                        api: &api::TABLE,
+                    });
+
                     // Push loader.
                     unsafe {
                         lua::lua_pushcclosure(lua, Some(std::mem::transmute(bootstrap)), 0);
-                        lua::lua_pushlightuserdata(
-                            lua,
-                            std::mem::transmute(&api::TABLE as *const _),
-                        );
+                        lua::lua_pushlightuserdata(lua, &*data as *const _ as *mut _);
                     }
 
-                    Some(program)
+                    Some(NativeData {
+                        library: program,
+                        name,
+                        data,
+                    })
                 }
                 None => {
                     lua::push_string(lua, "the module cannot run on this platform");
@@ -194,7 +215,7 @@ impl<'context> Engine<'context> {
 
         // Add module to loaded table.
         // TODO: Use try_insert once https://github.com/rust-lang/rust/issues/82766 is stable.
-        if self.loaded_modules.insert(module, library).is_some() {
+        if self.loaded_modules.insert(module, native).is_some() {
             panic!("Some module was loaded twice somehow")
         }
 
