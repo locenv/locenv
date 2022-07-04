@@ -28,12 +28,12 @@ impl BinaryProgram {
     }
 
     #[cfg(target_os = "macos")]
-    pub fn current(&self) -> Option<&PlatformConfigurations> {
+    pub fn current(&self) -> Option<&str> {
         self.darwin.as_deref()
     }
 
     #[cfg(target_os = "windows")]
-    pub fn current(&self) -> Option<&PlatformConfigurations> {
+    pub fn current(&self) -> Option<&str> {
         self.win32.as_deref()
     }
 }
