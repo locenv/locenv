@@ -1,6 +1,6 @@
 use lua::{
-    lua_Alloc, lua_CFunction, lua_Integer, lua_KContext, lua_KFunction, lua_Number, lua_Reader,
-    lua_State, lua_Unsigned, lua_Writer, size_t,
+    luaL_Reg, lua_Alloc, lua_CFunction, lua_Integer, lua_KContext, lua_KFunction, lua_Number,
+    lua_Reader, lua_State, lua_Unsigned, lua_Writer, size_t,
 };
 use std::ffi::c_void;
 use std::os::raw::{c_char, c_int};
@@ -79,6 +79,39 @@ pub const TABLE: Table = Table {
     lua_getallocf: lua::lua_getallocf,
     lua_gc: lua::lua_gc,
     lua_version: lua::lua_version,
+    aux_checkany: lua::luaL_checkany,
+    aux_checkinteger: lua::luaL_checkinteger,
+    aux_checklstring: lua::luaL_checklstring,
+    aux_checknumber: lua::luaL_checknumber,
+    aux_checkoption: lua::luaL_checkoption,
+    aux_checkudata: lua::luaL_checkudata,
+    aux_testudata: lua::luaL_testudata,
+    aux_checktype: lua::luaL_checktype,
+    aux_typeerror: lua::luaL_typeerror,
+    aux_argerror: lua::luaL_argerror,
+    aux_optinteger: lua::luaL_optinteger,
+    aux_optlstring: lua::luaL_optlstring,
+    aux_optnumber: lua::luaL_optnumber,
+    aux_error: lua::luaL_error,
+    aux_checkstack: lua::luaL_checkstack,
+    aux_tolstring: lua::luaL_tolstring,
+    aux_len: lua::luaL_len,
+    aux_getsubtable: lua::luaL_getsubtable,
+    aux_ref: lua::luaL_ref,
+    aux_unref: lua::luaL_unref,
+    aux_newmetatable: lua::luaL_newmetatable,
+    aux_setmetatable: lua::luaL_setmetatable,
+    aux_callmeta: lua::luaL_callmeta,
+    aux_getmetafield: lua::luaL_getmetafield,
+    aux_loadstring: lua::luaL_loadstring,
+    aux_loadfilex: lua::luaL_loadfilex,
+    aux_loadbufferx: lua::luaL_loadbufferx,
+    aux_setfuncs: lua::luaL_setfuncs,
+    aux_where: lua::luaL_where,
+    aux_traceback: lua::luaL_traceback,
+    aux_gsub: lua::luaL_gsub,
+    aux_execresult: lua::luaL_execresult,
+    aux_fileresult: lua::luaL_fileresult,
 };
 
 #[repr(C)]
@@ -184,4 +217,57 @@ pub struct Table {
     lua_getallocf: unsafe extern "C" fn(*mut lua_State, *mut *mut c_void) -> lua_Alloc,
     lua_gc: unsafe extern "C" fn(*mut lua_State, c_int, ...) -> c_int,
     lua_version: unsafe extern "C" fn(*mut lua_State) -> lua_Number,
+
+    aux_checkany: unsafe extern "C" fn(*mut lua_State, c_int),
+    aux_checkinteger: unsafe extern "C" fn(*mut lua_State, c_int) -> lua_Integer,
+    aux_checklstring: unsafe extern "C" fn(*mut lua_State, c_int, *mut size_t) -> *const c_char,
+    aux_checknumber: unsafe extern "C" fn(*mut lua_State, c_int) -> lua_Number,
+    aux_checkoption:
+        unsafe extern "C" fn(*mut lua_State, c_int, *const c_char, *const *const c_char) -> c_int,
+    aux_checkudata: unsafe extern "C" fn(*mut lua_State, c_int, *const c_char) -> *mut c_void,
+    aux_testudata: unsafe extern "C" fn(*mut lua_State, c_int, *const c_char) -> *mut c_void,
+    aux_checktype: unsafe extern "C" fn(*mut lua_State, c_int, c_int),
+    aux_typeerror: unsafe extern "C" fn(*mut lua_State, c_int, *const c_char) -> c_int,
+    aux_argerror: unsafe extern "C" fn(*mut lua_State, c_int, *const c_char) -> c_int,
+
+    aux_optinteger: unsafe extern "C" fn(*mut lua_State, c_int, lua_Integer) -> lua_Integer,
+    aux_optlstring:
+        unsafe extern "C" fn(*mut lua_State, c_int, *const c_char, *mut size_t) -> *const c_char,
+    aux_optnumber: unsafe extern "C" fn(*mut lua_State, c_int, lua_Number) -> lua_Number,
+
+    aux_error: unsafe extern "C" fn(*mut lua_State, *const c_char, ...) -> c_int,
+    aux_checkstack: unsafe extern "C" fn(*mut lua_State, c_int, *const c_char),
+    aux_tolstring: unsafe extern "C" fn(*mut lua_State, c_int, *mut size_t) -> *const c_char,
+
+    aux_len: unsafe extern "C" fn(*mut lua_State, c_int) -> lua_Integer,
+    aux_getsubtable: unsafe extern "C" fn(*mut lua_State, c_int, *const c_char) -> c_int,
+    aux_ref: unsafe extern "C" fn(*mut lua_State, c_int) -> c_int,
+    aux_unref: unsafe extern "C" fn(*mut lua_State, c_int, c_int),
+
+    aux_newmetatable: unsafe extern "C" fn(*mut lua_State, *const c_char) -> c_int,
+    aux_setmetatable: unsafe extern "C" fn(*mut lua_State, *const c_char),
+    aux_callmeta: unsafe extern "C" fn(*mut lua_State, c_int, *const c_char) -> c_int,
+    aux_getmetafield: unsafe extern "C" fn(*mut lua_State, c_int, *const c_char) -> c_int,
+
+    aux_loadstring: unsafe extern "C" fn(*mut lua_State, *const c_char) -> c_int,
+    aux_loadfilex: unsafe extern "C" fn(*mut lua_State, *const c_char, *const c_char) -> c_int,
+    aux_loadbufferx: unsafe extern "C" fn(
+        *mut lua_State,
+        *const c_char,
+        size_t,
+        *const c_char,
+        *const c_char,
+    ) -> c_int,
+
+    aux_setfuncs: unsafe extern "C" fn(*mut lua_State, *const luaL_Reg, c_int),
+    aux_where: unsafe extern "C" fn(*mut lua_State, c_int),
+    aux_traceback: unsafe extern "C" fn(*mut lua_State, *mut lua_State, *const c_char, c_int),
+    aux_gsub: unsafe extern "C" fn(
+        *mut lua_State,
+        *const c_char,
+        *const c_char,
+        *const c_char,
+    ) -> *const c_char,
+    aux_execresult: unsafe extern "C" fn(*mut lua_State, c_int) -> c_int,
+    aux_fileresult: unsafe extern "C" fn(*mut lua_State, c_int, *const c_char) -> c_int,
 }
