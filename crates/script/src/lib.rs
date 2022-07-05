@@ -1,5 +1,10 @@
 use context::Context;
-use lua::lua_State;
+use lua::{
+    get_field, luaL_newstate, luaL_requiref, lua_State, lua_pushnil, lua_seti, luaopen_base,
+    luaopen_io, luaopen_math, luaopen_os, luaopen_package, luaopen_string, luaopen_table,
+    luaopen_utf8, pop, push_closure, LUA_GNAME, LUA_IOLIBNAME, LUA_LOADLIBNAME, LUA_MATHLIBNAME,
+    LUA_OSLIBNAME, LUA_STRLIBNAME, LUA_TABLIBNAME, LUA_UTF8LIBNAME,
+};
 use module::Module;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -42,7 +47,7 @@ struct LoaderData {
 impl<'context> Engine<'context> {
     pub fn new(context: &'context Context) -> Self {
         // Allocate state.
-        let lua = unsafe { lua::luaL_newstate() };
+        let lua = unsafe { luaL_newstate() };
 
         if lua.is_null() {
             panic!("Failed to create Lua engine due to insufficient memory");
@@ -54,37 +59,51 @@ impl<'context> Engine<'context> {
             phantom: PhantomData,
         };
 
-        // Setup base library.
-        unsafe {
-            lua::luaL_requiref(
-                lua,
-                lua::LUA_GNAME.as_ptr() as *const _,
-                Some(lua::luaopen_base),
-                1,
-            )
+        let install = |name: &[u8], loader: unsafe extern "C" fn(*mut lua_State) -> c_int| unsafe {
+            luaL_requiref(lua, transmute(name.as_ptr()), Some(loader), 1)
         };
-        lua::pop(lua, 1);
+
+        // Setup base library.
+        install(LUA_GNAME, luaopen_base);
+        pop(lua, 1);
 
         // Setup package library.
-        unsafe {
-            lua::luaL_requiref(
-                lua,
-                lua::LUA_LOADLIBNAME.as_ptr() as *const _,
-                Some(lua::luaopen_package),
-                1,
-            )
-        };
-        lua::get_field(lua, -1, "searchers");
+        install(LUA_LOADLIBNAME, luaopen_package);
+        get_field(lua, -1, "searchers");
 
         for i in (2..=4).rev() {
             // Remove all package.searchers except the first one.
-            unsafe { lua::lua_pushnil(lua) };
-            unsafe { lua::lua_seti(lua, -2, i) };
+            unsafe { lua_pushnil(lua) };
+            unsafe { lua_seti(lua, -2, i) };
         }
 
-        lua::push_closure(lua, |lua| engine.module_searcher(lua, context));
-        unsafe { lua::lua_seti(lua, -2, 2) };
-        lua::pop(lua, 1); // Pop searchers.
+        push_closure(lua, |lua| engine.module_searcher(lua, context));
+        unsafe { lua_seti(lua, -2, 2) };
+        pop(lua, 2); // Pop searchers and module.
+
+        // Setup table library.
+        install(LUA_TABLIBNAME, luaopen_table);
+        pop(lua, 1);
+
+        // Setup I/O library.
+        install(LUA_IOLIBNAME, luaopen_io);
+        pop(lua, 1);
+
+        // Setup OS library.
+        install(LUA_OSLIBNAME, luaopen_os);
+        pop(lua, 1);
+
+        // Setup string library.
+        install(LUA_STRLIBNAME, luaopen_string);
+        pop(lua, 1);
+
+        // Setup math library.
+        install(LUA_MATHLIBNAME, luaopen_math);
+        pop(lua, 1);
+
+        // Setup UTF-8 library.
+        install(LUA_UTF8LIBNAME, luaopen_utf8);
+        pop(lua, 1);
 
         engine
     }
