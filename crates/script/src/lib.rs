@@ -7,6 +7,7 @@ use std::error::Error;
 use std::ffi::CString;
 use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
+use std::mem::transmute;
 use std::os::raw::{c_char, c_int};
 
 mod api;
@@ -158,7 +159,7 @@ impl<'context> Engine<'context> {
                 Some(file) => {
                     // Load the module.
                     let path = module.path().join(file);
-                    let program = match unsafe { libloading::Library::new(&path) } {
+                    let library = match unsafe { libloading::Library::new(&path) } {
                         Ok(r) => r,
                         Err(e) => {
                             lua::push_string(
@@ -169,16 +170,16 @@ impl<'context> Engine<'context> {
                         }
                     };
 
-                    // Get bootstrap function.
-                    let bootstrap = match unsafe {
-                        program.get::<unsafe extern "C" fn(*mut lua_State) -> c_int>(b"bootstrap\0")
+                    // Get loader function.
+                    let loader = match unsafe {
+                        library.get::<unsafe extern "C" fn(*mut lua_State) -> c_int>(b"loader\0")
                     } {
                         Ok(r) => unsafe { r.into_raw().into_raw() },
                         Err(e) => {
                             lua::push_string(
                                 lua,
                                 &format!(
-                                    "cannot find bootstrap function in {}: {}",
+                                    "cannot find loader function in {}: {}",
                                     path.display(),
                                     e
                                 ),
@@ -196,12 +197,12 @@ impl<'context> Engine<'context> {
 
                     // Push loader.
                     unsafe {
-                        lua::lua_pushcclosure(lua, Some(std::mem::transmute(bootstrap)), 0);
-                        lua::lua_pushlightuserdata(lua, &*data as *const _ as *mut _);
+                        lua::lua_pushcclosure(lua, Some(transmute(loader)), 0);
+                        lua::lua_pushlightuserdata(lua, transmute(&*data));
                     }
 
                     Some(NativeData {
-                        library: program,
+                        library,
                         name,
                         data,
                     })
