@@ -1,4 +1,5 @@
 use context::Context;
+use libloading::Library;
 use lua::{
     luaL_checklstring, luaL_loadfilex, luaL_loadstring, luaL_newstate, luaL_requiref, lua_Integer,
     lua_State, lua_close, lua_getfield, lua_pcallk, lua_pushcclosure, lua_pushlightuserdata,
@@ -16,6 +17,7 @@ use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
 use std::mem::transmute;
 use std::os::raw::{c_char, c_int};
+use std::path::Path;
 use std::ptr::{null, null_mut};
 
 mod api;
@@ -26,6 +28,7 @@ macro_rules! cfmt {
     }
 }
 
+/// Represents an isolated environment to execute Lua script.
 pub struct Engine<'context> {
     lua: *mut lua_State,
     loaded_modules: Box<ModuleTable<'context>>,
@@ -145,7 +148,7 @@ impl<'context> Engine<'context> {
         };
 
         // Load the module.
-        let native: Option<NativeData> = match &module.definition().program {
+        let native: Option<Library> = match &module.definition().program {
             config::module::Program::Script(file) => {
                 let path = module.path().join(file);
                 let file = CString::new(path.to_str().unwrap()).unwrap();
@@ -156,49 +159,20 @@ impl<'context> Engine<'context> {
                     return 1;
                 }
 
-                lua::lua_pushstring(lua, file.as_ptr());
+                lua_pushstring(lua, file.as_ptr());
                 None
             }
             config::module::Program::Binary(program) => match program.current() {
                 Some(file) => {
-                    // Load the module.
-                    let path = module.path().join(file);
-                    let library = match libloading::Library::new(&path) {
-                        Ok(r) => r,
-                        Err(e) => {
-                            let message = cfmt!("cannot load {}: {}", path.display(), e);
-                            lua_pushstring(lua, message.as_ptr());
-                            return 1;
-                        }
-                    };
+                    let name = &module.definition().name;
+                    let file = module.path().join(file);
+                    let result = Self::bootstrap_native_module(lua, name, &file);
 
-                    // Get loader function.
-                    let loader = match library.get::<LuaFunction>(b"loader\0") {
-                        Ok(r) => r.into_raw().into_raw(),
-                        Err(e) => {
-                            let message =
-                                cfmt!("cannot find loader function in {}: {}", path.display(), e);
-                            lua_pushstring(lua, message.as_ptr());
-                            return 1;
-                        }
-                    };
+                    if result.is_none() {
+                        return 1;
+                    }
 
-                    // Allocate loader data.
-                    let name = Box::new(CString::new(module.definition().name.as_str()).unwrap());
-                    let data = Box::new(LoaderData {
-                        name: name.as_ptr(),
-                        api: &api::TABLE,
-                    });
-
-                    // Push loader.
-                    lua_pushcclosure(lua, Some(transmute(loader)), 0);
-                    lua_pushlightuserdata(lua, transmute(&*data));
-
-                    Some(NativeData {
-                        library,
-                        name,
-                        data,
-                    })
+                    result
                 }
                 None => {
                     let message = CString::new("the module cannot run on this platform").unwrap();
@@ -215,6 +189,44 @@ impl<'context> Engine<'context> {
         }
 
         2
+    }
+
+    fn bootstrap_native_module(lua: *mut lua_State, name: &str, file: &Path) -> Option<Library> {
+        // Load the module.
+        let library = match unsafe { Library::new(&file) } {
+            Ok(r) => r,
+            Err(e) => {
+                let message = cfmt!("cannot load {}: {}", file.display(), e);
+                unsafe { lua_pushstring(lua, message.as_ptr()) };
+                return None;
+            }
+        };
+
+        // Get bootstrap function.
+        let bootstrap = match unsafe { library.get::<ModuleBootstrap>(b"bootstrap\0") } {
+            Ok(r) => r,
+            Err(e) => {
+                let message = cfmt!(
+                    "cannot find bootstrap function in {}: {}",
+                    file.display(),
+                    e
+                );
+                unsafe { lua_pushstring(lua, message.as_ptr()) };
+                return None;
+            }
+        };
+
+        // Bootstrap the module.
+        let name = CString::new(name).unwrap();
+
+        match unsafe { bootstrap(lua, name.as_ptr(), &api::TABLE) } {
+            1 => None,
+            2 => Some(library),
+            _ => panic!(
+                "{} return an unexpected value from bootstrap function",
+                file.display()
+            ),
+        }
     }
 
     fn open_library(&mut self, name: &[u8], function: LuaFunction) {
@@ -281,6 +293,7 @@ impl<'context> Drop for Engine<'context> {
     }
 }
 
+/// Represents the error from execution of a Lua script.
 #[derive(Debug)]
 pub enum RunError {
     LoadError(String),
@@ -298,18 +311,7 @@ impl Display for RunError {
     }
 }
 
-type ModuleTable<'context> = HashMap<Module<'context, 'static>, Option<NativeData>>;
+type ModuleTable<'context> = HashMap<Module<'context, 'static>, Option<Library>>;
 type LuaFunction = unsafe extern "C" fn(*mut lua_State) -> c_int;
-
-#[allow(dead_code)]
-struct NativeData {
-    library: libloading::Library,
-    name: Box<CString>,
-    data: Box<LoaderData>,
-}
-
-#[repr(C)]
-struct LoaderData {
-    name: *const c_char,
-    api: *const api::Table,
-}
+type ModuleBootstrap =
+    unsafe extern "C" fn(*mut lua_State, *const c_char, *const api::Table) -> c_int;
