@@ -1,48 +1,36 @@
 use context::Context;
 use lua::{
-    get_field, luaL_newstate, luaL_requiref, lua_State, lua_pushnil, lua_seti, luaopen_base,
+    luaL_checklstring, luaL_loadfilex, luaL_loadstring, luaL_newstate, luaL_requiref, lua_Integer,
+    lua_State, lua_close, lua_getfield, lua_pcallk, lua_pushcclosure, lua_pushlightuserdata,
+    lua_pushnil, lua_pushstring, lua_seti, lua_settop, lua_tolstring, lua_touserdata, luaopen_base,
     luaopen_io, luaopen_math, luaopen_os, luaopen_package, luaopen_string, luaopen_table,
-    luaopen_utf8, pop, push_closure, LUA_GNAME, LUA_IOLIBNAME, LUA_LOADLIBNAME, LUA_MATHLIBNAME,
-    LUA_OSLIBNAME, LUA_STRLIBNAME, LUA_TABLIBNAME, LUA_UTF8LIBNAME,
+    luaopen_utf8, LUA_GNAME, LUA_IOLIBNAME, LUA_LOADLIBNAME, LUA_MATHLIBNAME, LUA_OSLIBNAME,
+    LUA_REGISTRYINDEX, LUA_STRLIBNAME, LUA_TABLIBNAME, LUA_UTF8LIBNAME,
 };
 use module::Module;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::error::Error;
-use std::ffi::CString;
+use std::ffi::{c_void, CStr, CString};
 use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
 use std::mem::transmute;
 use std::os::raw::{c_char, c_int};
+use std::ptr::{null, null_mut};
 
 mod api;
 
+macro_rules! cfmt {
+    ($($x:tt)*) => {
+        CString::new(format!($($x)*)).unwrap()
+    }
+}
+
 pub struct Engine<'context> {
-    lua: *mut lua::lua_State,
-    loaded_modules: HashMap<Module<'context, 'static>, Option<NativeData>>,
-    phantom: PhantomData<&'context mut lua::lua_State>,
+    lua: *mut lua_State,
+    loaded_modules: Box<ModuleTable<'context>>,
+    phantom: PhantomData<&'context mut lua_State>,
 }
-
-#[derive(Debug)]
-pub enum RunError {
-    LoadError(String),
-    ExecError(String),
-}
-
-#[allow(dead_code)]
-struct NativeData {
-    library: libloading::Library,
-    name: Box<CString>,
-    data: Box<LoaderData>,
-}
-
-#[repr(C)]
-struct LoaderData {
-    name: *const c_char,
-    api: *const api::Table,
-}
-
-// Engine
 
 impl<'context> Engine<'context> {
     pub fn new(context: &'context Context) -> Self {
@@ -55,103 +43,101 @@ impl<'context> Engine<'context> {
 
         let mut engine = Engine {
             lua,
-            loaded_modules: HashMap::new(),
+            loaded_modules: Box::new(ModuleTable::new()),
             phantom: PhantomData,
         };
 
-        let install = |name: &[u8], loader: unsafe extern "C" fn(*mut lua_State) -> c_int| unsafe {
-            luaL_requiref(lua, transmute(name.as_ptr()), Some(loader), 1)
-        };
-
         // Setup base library.
-        install(LUA_GNAME, luaopen_base);
-        pop(lua, 1);
+        engine.open_library(LUA_GNAME, luaopen_base);
+        engine.pop_stack(1);
 
         // Setup package library.
-        install(LUA_LOADLIBNAME, luaopen_package);
-        get_field(lua, -1, "searchers");
+        engine.open_library(LUA_LOADLIBNAME, luaopen_package);
+        engine.get_field(-1, "searchers");
 
         for i in (2..=4).rev() {
             // Remove all package.searchers except the first one.
-            unsafe { lua_pushnil(lua) };
-            unsafe { lua_seti(lua, -2, i) };
+            engine.push_nil();
+            engine.set_index(-2, i);
         }
 
-        push_closure(lua, |lua| engine.module_searcher(lua, context));
-        unsafe { lua_seti(lua, -2, 2) };
-        pop(lua, 2); // Pop searchers and module.
+        engine.push_light_userdata(unsafe { transmute(context) });
+        engine.push_light_userdata(unsafe { transmute(&*engine.loaded_modules) });
+        engine.push_fn(Self::module_searcher, 2);
+
+        engine.set_index(-2, 2);
+        engine.pop_stack(2); // Pop searchers and module.
 
         // Setup table library.
-        install(LUA_TABLIBNAME, luaopen_table);
-        pop(lua, 1);
+        engine.open_library(LUA_TABLIBNAME, luaopen_table);
+        engine.pop_stack(1);
 
         // Setup I/O library.
-        install(LUA_IOLIBNAME, luaopen_io);
-        pop(lua, 1);
+        engine.open_library(LUA_IOLIBNAME, luaopen_io);
+        engine.pop_stack(1);
 
         // Setup OS library.
-        install(LUA_OSLIBNAME, luaopen_os);
-        pop(lua, 1);
+        engine.open_library(LUA_OSLIBNAME, luaopen_os);
+        engine.pop_stack(1);
 
         // Setup string library.
-        install(LUA_STRLIBNAME, luaopen_string);
-        pop(lua, 1);
+        engine.open_library(LUA_STRLIBNAME, luaopen_string);
+        engine.pop_stack(1);
 
         // Setup math library.
-        install(LUA_MATHLIBNAME, luaopen_math);
-        pop(lua, 1);
+        engine.open_library(LUA_MATHLIBNAME, luaopen_math);
+        engine.pop_stack(1);
 
         // Setup UTF-8 library.
-        install(LUA_UTF8LIBNAME, luaopen_utf8);
-        pop(lua, 1);
+        engine.open_library(LUA_UTF8LIBNAME, luaopen_utf8);
+        engine.pop_stack(1);
 
         engine
     }
 
     pub fn run(&mut self, script: &str) -> Result<(), RunError> {
         // Load script.
-        let lua = CString::new(script).unwrap();
-        let status = unsafe { lua::luaL_loadstring(self.lua, lua.as_ptr()) };
+        let script = CString::new(script).unwrap();
+        let status = unsafe { luaL_loadstring(self.lua, script.as_ptr()) };
 
         if status != 0 {
-            return Err(RunError::LoadError(lua::pop_string(self.lua).unwrap()));
+            return Err(RunError::LoadError(self.pop_string().unwrap()));
         }
 
         // Run script.
-        let status = unsafe { lua::lua_pcallk(self.lua, 0, 0, 0, 0, None) };
+        let status = unsafe { lua_pcallk(self.lua, 0, 0, 0, 0, None) };
 
         if status != 0 {
-            return Err(RunError::ExecError(lua::pop_string(self.lua).unwrap()));
+            return Err(RunError::ExecError(self.pop_string().unwrap()));
         }
 
         Ok(())
     }
 
-    fn module_searcher(
-        &mut self,
-        lua: *mut lua::lua_State,
-        context: &'context Context,
-    ) -> lua::c_int {
-        let name = lua::check_string(lua, 1).unwrap();
+    unsafe extern "C" fn module_searcher(lua: *mut lua::lua_State) -> c_int {
+        let context: &Context = transmute(lua_touserdata(lua, LUA_REGISTRYINDEX - 1));
+        let loaded: &mut ModuleTable = transmute(lua_touserdata(lua, LUA_REGISTRYINDEX - 2));
+        let name = luaL_checklstring(lua, 1, null_mut());
+        let name = CStr::from_ptr(name).to_str().unwrap();
 
         // Find the module.
-        let module = match Module::find(context, Cow::Owned(name)) {
+        let module = match Module::find(context, Cow::Owned(name.into())) {
             Ok(r) => r,
             Err(e) => match e {
                 module::FindError::NotInstalled(p) => {
-                    lua::push_string(
-                        lua,
-                        &format!("the module is not installed in {}", p.display()),
-                    );
+                    let message = cfmt!("the module is not installed in {}", p.display());
+                    lua_pushstring(lua, message.as_ptr());
                     return 1;
                 }
                 module::FindError::LoadDefinitionFailed(f, e) => match e {
                     config::FromFileError::OpenFailed(e) => {
-                        lua::push_string(lua, &format!("cannot open {}: {}", f.display(), e));
+                        let message = cfmt!("cannot open {}: {}", f.display(), e);
+                        lua_pushstring(lua, message.as_ptr());
                         return 1;
                     }
                     config::FromFileError::ParseFailed(e) => {
-                        lua::push_string(lua, &format!("cannot parse {}: {}", f.display(), e));
+                        let message = cfmt!("cannot parse {}: {}", f.display(), e);
+                        lua_pushstring(lua, message.as_ptr());
                         return 1;
                     }
                 },
@@ -163,46 +149,36 @@ impl<'context> Engine<'context> {
             config::module::Program::Script(file) => {
                 let path = module.path().join(file);
                 let file = CString::new(path.to_str().unwrap()).unwrap();
-                let status = unsafe { lua::luaL_loadfilex(lua, file.as_ptr(), std::ptr::null()) };
+                let status = luaL_loadfilex(lua, file.as_ptr(), null());
 
                 if status != 0 {
                     // luaL_loadfilex already pushed the error message.
                     return 1;
                 }
 
-                unsafe { lua::lua_pushstring(lua, file.as_ptr()) };
-
+                lua::lua_pushstring(lua, file.as_ptr());
                 None
             }
             config::module::Program::Binary(program) => match program.current() {
                 Some(file) => {
                     // Load the module.
                     let path = module.path().join(file);
-                    let library = match unsafe { libloading::Library::new(&path) } {
+                    let library = match libloading::Library::new(&path) {
                         Ok(r) => r,
                         Err(e) => {
-                            lua::push_string(
-                                lua,
-                                &format!("cannot load {}: {}", path.display(), e),
-                            );
+                            let message = cfmt!("cannot load {}: {}", path.display(), e);
+                            lua_pushstring(lua, message.as_ptr());
                             return 1;
                         }
                     };
 
                     // Get loader function.
-                    let loader = match unsafe {
-                        library.get::<unsafe extern "C" fn(*mut lua_State) -> c_int>(b"loader\0")
-                    } {
-                        Ok(r) => unsafe { r.into_raw().into_raw() },
+                    let loader = match library.get::<LuaFunction>(b"loader\0") {
+                        Ok(r) => r.into_raw().into_raw(),
                         Err(e) => {
-                            lua::push_string(
-                                lua,
-                                &format!(
-                                    "cannot find loader function in {}: {}",
-                                    path.display(),
-                                    e
-                                ),
-                            );
+                            let message =
+                                cfmt!("cannot find loader function in {}: {}", path.display(), e);
+                            lua_pushstring(lua, message.as_ptr());
                             return 1;
                         }
                     };
@@ -215,10 +191,8 @@ impl<'context> Engine<'context> {
                     });
 
                     // Push loader.
-                    unsafe {
-                        lua::lua_pushcclosure(lua, Some(transmute(loader)), 0);
-                        lua::lua_pushlightuserdata(lua, transmute(&*data));
-                    }
+                    lua_pushcclosure(lua, Some(transmute(loader)), 0);
+                    lua_pushlightuserdata(lua, transmute(&*data));
 
                     Some(NativeData {
                         library,
@@ -227,7 +201,8 @@ impl<'context> Engine<'context> {
                     })
                 }
                 None => {
-                    lua::push_string(lua, "the module cannot run on this platform");
+                    let message = CString::new("the module cannot run on this platform").unwrap();
+                    lua_pushstring(lua, message.as_ptr());
                     return 1;
                 }
             },
@@ -235,21 +210,82 @@ impl<'context> Engine<'context> {
 
         // Add module to loaded table.
         // TODO: Use try_insert once https://github.com/rust-lang/rust/issues/82766 is stable.
-        if self.loaded_modules.insert(module, native).is_some() {
+        if loaded.insert(module, native).is_some() {
             panic!("Some module was loaded twice somehow")
         }
 
         2
     }
+
+    fn open_library(&mut self, name: &[u8], function: LuaFunction) {
+        if let Some(b) = name.last() {
+            if *b != 0 {
+                panic!("Name must be null-terminated")
+            }
+        } else {
+            panic!("Name cannot be empty")
+        }
+
+        unsafe { luaL_requiref(self.lua, transmute(name.as_ptr()), Some(function), 1) }
+    }
+
+    fn get_field(&self, index: c_int, key: &str) -> c_int {
+        let key = CString::new(key).unwrap();
+
+        unsafe { lua_getfield(self.lua, index, key.as_ptr()) }
+    }
+
+    fn set_index(&mut self, table: c_int, index: lua_Integer) {
+        unsafe { lua_seti(self.lua, table, index) };
+    }
+
+    fn to_string(&mut self, index: c_int) -> Option<String> {
+        let value = unsafe { lua_tolstring(self.lua, index, null_mut()) };
+
+        if value.is_null() {
+            None
+        } else {
+            Some(unsafe { CStr::from_ptr(value).to_str().unwrap().into() })
+        }
+    }
+
+    fn push_nil(&mut self) {
+        unsafe { lua_pushnil(self.lua) };
+    }
+
+    fn push_fn(&mut self, function: LuaFunction, up_count: c_int) {
+        unsafe { lua_pushcclosure(self.lua, Some(function), up_count) };
+    }
+
+    fn push_light_userdata(&mut self, data: *mut c_void) {
+        unsafe { lua_pushlightuserdata(self.lua, data) }
+    }
+
+    fn pop_string(&mut self) -> Option<String> {
+        if let Some(v) = self.to_string(-1) {
+            self.pop_stack(1);
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    fn pop_stack(&mut self, count: c_int) {
+        unsafe { lua_settop(self.lua, -count - 1) };
+    }
 }
 
 impl<'context> Drop for Engine<'context> {
     fn drop(&mut self) {
-        unsafe { lua::lua_close(self.lua) };
+        unsafe { lua_close(self.lua) };
     }
 }
 
-// RunError
+#[derive(Debug)]
+pub enum RunError {
+    LoadError(String),
+    ExecError(String),
+}
 
 impl Error for RunError {}
 
@@ -260,4 +296,20 @@ impl Display for RunError {
             Self::ExecError(e) => write!(f, "Failed to execute script: {}", e),
         }
     }
+}
+
+type ModuleTable<'context> = HashMap<Module<'context, 'static>, Option<NativeData>>;
+type LuaFunction = unsafe extern "C" fn(*mut lua_State) -> c_int;
+
+#[allow(dead_code)]
+struct NativeData {
+    library: libloading::Library,
+    name: Box<CString>,
+    data: Box<LoaderData>,
+}
+
+#[repr(C)]
+struct LoaderData {
+    name: *const c_char,
+    api: *const api::Table,
 }
