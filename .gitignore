@@ -1,3 +1,4 @@
 /.locenv/
+/.vscode/launch.json
 /locenv-services.yml
 /target/
