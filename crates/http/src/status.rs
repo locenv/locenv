@@ -63,7 +63,7 @@ impl<'r> FromStr for Line<'r> {
         let mut code: Option<Code> = None;
         let mut reason: Option<&str> = None;
 
-        for p in s.splitn(2, ' ') {
+        for p in s.splitn(3, ' ') {
             if version.is_none() {
                 version = Some(match p.parse() {
                     Ok(r) => r,
