@@ -1,29 +1,29 @@
 use crate::handler::Handler;
 use crate::header::Header;
+use crate::mime::MediaType;
 use crate::status;
-use mime::Mime;
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::io::Write;
 
-pub struct Writer<O: Write> {
+pub struct Writer<'allowed_type, O: Write> {
     output: O,
-    allowed_types: HashSet<Mime>,
+    allowed_types: HashSet<MediaType<'allowed_type>>,
     final_response: bool,
-    content_type: Option<Mime>,
+    content_type: Option<MediaType<'static>>,
 }
 
 #[derive(Debug)]
 pub enum ReadError {
     UnhandledStatus(status::Code),
     MalformedContentType(String),
-    UnexpectedContentType(Option<Mime>),
+    UnexpectedContentType(Option<MediaType<'static>>),
     WriteFailed(std::io::Error),
 }
 
 // Writer
 
-impl<O: Write> Writer<O> {
+impl<'allowed_type, O: Write> Writer<'allowed_type, O> {
     pub fn new(output: O) -> Self {
         Writer {
             output,
@@ -33,14 +33,14 @@ impl<O: Write> Writer<O> {
         }
     }
 
-    pub fn allow_type(mut self, r#type: Mime) -> Self {
+    pub fn allow_type(mut self, r#type: MediaType<'allowed_type>) -> Self {
         self.allowed_types.insert(r#type);
         self
     }
 }
 
-impl<O: Write> Handler for Writer<O> {
-    type Output = Option<Mime>;
+impl<'allowed_type, O: Write> Handler for Writer<'allowed_type, O> {
+    type Output = Option<MediaType<'static>>;
     type Err = ReadError;
 
     fn process_status(&mut self, line: &status::Line) -> Result<(), ReadError> {
@@ -63,7 +63,7 @@ impl<O: Write> Handler for Writer<O> {
 
         match name {
             Header::ContentType => {
-                let value: Mime = match value.parse() {
+                let value: MediaType = match value.parse() {
                     Ok(r) => r,
                     Err(_) => return Err(ReadError::MalformedContentType(value.into())),
                 };
@@ -79,11 +79,19 @@ impl<O: Write> Handler for Writer<O> {
         }
     }
 
-    fn process_body(&mut self, chunk: &[u8]) -> Result<(), ReadError> {
+    fn begin_body(&mut self) -> Result<(), ReadError> {
         if !self.final_response {
             return Ok(());
         } else if !self.allowed_types.is_empty() && self.content_type.is_none() {
             return Err(ReadError::UnexpectedContentType(None));
+        }
+
+        Ok(())
+    }
+
+    fn process_body(&mut self, chunk: &[u8]) -> Result<(), ReadError> {
+        if !self.final_response {
+            return Ok(());
         } else if let Err(e) = self.output.write_all(chunk) {
             return Err(ReadError::WriteFailed(e));
         }
@@ -91,7 +99,7 @@ impl<O: Write> Handler for Writer<O> {
         Ok(())
     }
 
-    fn take_output(&mut self) -> Result<Option<Mime>, ReadError> {
+    fn take_output(&mut self) -> Result<Option<MediaType<'static>>, ReadError> {
         Ok(self.content_type.take())
     }
 }

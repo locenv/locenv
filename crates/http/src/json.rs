@@ -1,7 +1,7 @@
 use crate::handler::Handler;
 use crate::header::Header;
+use crate::mime::{MediaType, APPLICATION_JSON};
 use crate::status;
-use mime::{Mime, APPLICATION_JSON};
 use std::fmt::{Display, Formatter};
 
 pub struct JsonReader {
@@ -13,7 +13,7 @@ pub struct JsonReader {
 pub enum ReadError {
     UnhandledStatus(status::Code),
     MalformedContentType(String),
-    InvalidContentType(Mime),
+    InvalidContentType(MediaType<'static>),
 }
 
 #[derive(Debug)]
@@ -78,7 +78,7 @@ impl Handler for JsonReader {
 
         match name {
             Header::ContentType => {
-                let value: Mime = match value.parse() {
+                let value: MediaType = match value.parse() {
                     Ok(r) => r,
                     Err(_) => return Err(ReadError::MalformedContentType(value.into())),
                 };
@@ -91,6 +91,10 @@ impl Handler for JsonReader {
             }
             _ => Ok(()),
         }
+    }
+
+    fn begin_body(&mut self) -> Result<(), ReadError> {
+        Ok(())
     }
 
     fn process_body(&mut self, chunk: &[u8]) -> Result<(), ReadError> {

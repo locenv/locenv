@@ -9,6 +9,7 @@ pub struct ModuleDefinition {
 }
 
 #[derive(Deserialize)]
+#[serde(untagged)]
 pub enum Program {
     Script(String),
     Binary(BinaryProgram),

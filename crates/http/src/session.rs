@@ -49,20 +49,7 @@ impl<'h, H: Handler> curl::easy::Handler for Session<'h, H> {
         };
 
         // Parse header.
-        if line.starts_with("HTTP/") {
-            let status: crate::status::Line = match line.parse() {
-                Ok(r) => r,
-                Err(_) => {
-                    self.invalid_header = Some(data.to_vec());
-                    return false;
-                }
-            };
-
-            if let Err(e) = self.handler.process_status(&status) {
-                self.status_error = Some(e);
-                return false;
-            }
-        } else if let Some((name, value)) = line.split_once(':') {
+        if let Some((name, value)) = line.split_once(':') {
             let value = value.trim();
 
             if name.is_empty() || value.is_empty() {
@@ -80,6 +67,24 @@ impl<'h, H: Handler> curl::easy::Handler for Session<'h, H> {
 
             if let Err(e) = self.handler.process_header(&header, value) {
                 self.header_error = Some(e);
+                return false;
+            }
+        } else if line == "\r\n" {
+            if let Err(e) = self.handler.begin_body() {
+                self.header_error = Some(e);
+                return false;
+            }
+        } else if line.starts_with("HTTP/") {
+            let status: crate::status::Line = match line.parse() {
+                Ok(r) => r,
+                Err(_) => {
+                    self.invalid_header = Some(data.to_vec());
+                    return false;
+                }
+            };
+
+            if let Err(e) = self.handler.process_status(&status) {
+                self.status_error = Some(e);
                 return false;
             }
         } else {

@@ -44,8 +44,9 @@ pub fn get_latest_package(id: &str) -> Result<File, Error> {
     let repo = buffer;
 
     // GitHub required User-Agent to be set otherwise we will get 403.
-    let options = http::Options {
+    let mut options = http::Options {
         user_agent: Some("locenv"),
+        accept: None,
     };
 
     // Get latest release.
@@ -71,8 +72,9 @@ pub fn get_latest_package(id: &str) -> Result<File, Error> {
 
     // Download release asset.
     let mut asset = tempfile::tempfile().unwrap();
-    let mut handler =
-        http::writer::Writer::new(&asset).allow_type("application/zip".parse().unwrap());
+    let mut handler = http::writer::Writer::new(&asset);
+
+    options.accept = Some("application/octet-stream");
 
     if let Err(e) = http::get(&release.assets[0].url, Some(&options), &mut handler) {
         return Err(Error::DownloadReleaseFailed(e.into()));

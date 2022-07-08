@@ -5,14 +5,16 @@ use std::fmt::{Debug, Display, Formatter};
 pub mod handler;
 pub mod header;
 pub mod json;
+pub mod mime;
 pub mod status;
 pub mod version;
 pub mod writer;
 
 mod session;
 
-pub struct Options<'user_agent> {
+pub struct Options<'user_agent, 'accept> {
     pub user_agent: Option<&'user_agent str>,
+    pub accept: Option<&'accept str>,
 }
 
 #[derive(Debug)]
@@ -35,11 +37,20 @@ pub fn get<H: Handler>(
 
     client.get(true).unwrap();
     client.url(url).unwrap();
+    client.follow_location(true).unwrap();
 
     if let Some(o) = options {
+        let mut customs = curl::easy::List::new();
+
         if let Some(v) = o.user_agent {
             client.useragent(v).unwrap();
         }
+
+        if let Some(v) = o.accept {
+            customs.append(&format!("Accept: {}", v)).unwrap();
+        }
+
+        client.http_headers(customs).unwrap();
     }
 
     // Execute request.
@@ -79,7 +90,13 @@ impl<H: Debug + Display> Display for Error<H> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Error::RequestFailed(e) => write!(f, "{}", e),
-            Error::InvalidHeader(d) => write!(f, "Header {:02x?} is not valid", d),
+            Error::InvalidHeader(d) => {
+                if let Ok(v) = std::str::from_utf8(d) {
+                    write!(f, "Header {} is not valid", v)
+                } else {
+                    write!(f, "Header {:02x?} is not valid", d)
+                }
+            }
             Error::StatusFailed(e) => write!(f, "{}", e),
             Error::HeaderFailed(e) => write!(f, "{}", e),
             Error::BodyFailed(e) => write!(f, "{}", e),
