@@ -21,6 +21,12 @@ sample-c:
 locenv up
 ```
 
+### Install a module
+
+```sh
+locenv mod install github:locenv/mod-autoconf
+```
+
 ### Update services to latest version
 
 ```sh
