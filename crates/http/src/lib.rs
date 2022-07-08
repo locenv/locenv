@@ -11,6 +11,10 @@ pub mod writer;
 
 mod session;
 
+pub struct Options<'user_agent> {
+    pub user_agent: Option<&'user_agent str>,
+}
+
 #[derive(Debug)]
 pub enum Error<H: Debug + Display> {
     RequestFailed(Box<dyn std::error::Error>),
@@ -21,12 +25,22 @@ pub enum Error<H: Debug + Display> {
     OutputFailed(H),
 }
 
-pub fn get<H: Handler>(url: &str, handler: &mut H) -> Result<H::Output, Error<H::Err>> {
+pub fn get<H: Handler>(
+    url: &str,
+    options: Option<&Options>,
+    handler: &mut H,
+) -> Result<H::Output, Error<H::Err>> {
     // Setup client.
     let mut client = curl::easy::Easy2::new(Session::new(handler));
 
     client.get(true).unwrap();
     client.url(url).unwrap();
+
+    if let Some(o) = options {
+        if let Some(v) = o.user_agent {
+            client.useragent(v).unwrap();
+        }
+    }
 
     // Execute request.
     if let Err(e) = client.perform() {

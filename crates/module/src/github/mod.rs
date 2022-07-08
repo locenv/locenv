@@ -43,6 +43,11 @@ pub fn get_latest_package(id: &str) -> Result<File, Error> {
     let owner = owner.unwrap();
     let repo = buffer;
 
+    // GitHub required User-Agent to be set otherwise we will get 403.
+    let options = http::Options {
+        user_agent: Some("locenv"),
+    };
+
     // Get latest release.
     let mut handler = JsonReader::new();
     let url = format!(
@@ -50,7 +55,7 @@ pub fn get_latest_package(id: &str) -> Result<File, Error> {
         owner, repo
     );
 
-    let status = match http::get(&url, &mut handler) {
+    let status = match http::get(&url, Some(&options), &mut handler) {
         Ok(r) => r,
         Err(e) => return Err(Error::ReadReleaseFailed(e.into())),
     };
@@ -69,7 +74,7 @@ pub fn get_latest_package(id: &str) -> Result<File, Error> {
     let mut handler =
         http::writer::Writer::new(&asset).allow_type("application/zip".parse().unwrap());
 
-    if let Err(e) = http::get(&release.assets[0].url, &mut handler) {
+    if let Err(e) = http::get(&release.assets[0].url, Some(&options), &mut handler) {
         return Err(Error::DownloadReleaseFailed(e.into()));
     }
 
