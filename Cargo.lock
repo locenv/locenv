@@ -353,6 +353,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fmap"
+version = "0.1.0"
+
+[[package]]
+name = "fmap-macros"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "form_urlencoded"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -641,6 +653,8 @@ version = "0.1.0"
 dependencies = [
  "config",
  "context",
+ "fmap",
+ "fmap-macros",
  "fs_extra",
  "http",
  "serde",

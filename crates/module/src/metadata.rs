@@ -1,15 +1,22 @@
 use crate::package::PackageId;
 use context::modules::module::metadata::Metadata;
-use std::fs::create_dir_all;
+use fmap_macros::Directory;
 use std::path::PathBuf;
 
+#[derive(Directory)]
 pub struct MetadataManager<'context, 'module> {
     context: Metadata<'context, 'module>,
+
+    #[file]
+    registry: fmap::Text,
 }
 
 impl<'context, 'module> MetadataManager<'context, 'module> {
     pub(super) fn new(context: Metadata<'context, 'module>) -> Self {
-        MetadataManager { context }
+        MetadataManager {
+            context,
+            registry: fmap::Text,
+        }
     }
 
     pub fn write_registry(&self, package: &PackageId) {
@@ -17,22 +24,21 @@ impl<'context, 'module> MetadataManager<'context, 'module> {
 
         data.push('\n');
 
-        std::fs::write(self.registry_path(), &data).unwrap();
+        self.registry().write(&data).unwrap();
     }
 
-    fn registry_path(&self) -> PathBuf {
-        let mut path = self.ensure_path();
-        path.push("registry");
-        path
+    pub fn read_registry(&self) -> Option<PackageId> {
+        self.registry().read().map(|v| v.trim().parse().unwrap())
     }
 
-    fn ensure_path(&self) -> PathBuf {
-        let path = self.context.path();
+    /// Gets the name of directory all metadata is stored. This returns only a directory name, not a path.
+    pub fn directory(&self) -> &str {
+        self.context.name()
+    }
+}
 
-        if !path.exists() {
-            create_dir_all(&path).unwrap();
-        }
-
-        path
+impl<'context, 'module> fmap::Parent for MetadataManager<'context, 'module> {
+    fn path(&self) -> PathBuf {
+        self.context.path()
     }
 }

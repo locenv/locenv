@@ -16,4 +16,8 @@ impl<'context, 'module> Metadata<'context, 'module> {
         p.push(self.name);
         p
     }
+
+    pub fn name(&self) -> &str {
+        self.name
+    }
 }

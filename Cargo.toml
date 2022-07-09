@@ -4,6 +4,8 @@ members = [
     "crates/config",
     "crates/config-macros",
     "crates/context",
+    "crates/fmap",
+    "crates/fmap-macros",
     "crates/http",
     "crates/lua",
     "crates/manager",

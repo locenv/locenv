@@ -10,8 +10,10 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::fs::create_dir_all;
 use std::hash::Hash;
+use std::io::{Read, Seek};
 use std::path::Path;
 use std::path::PathBuf;
+use tempfile::TempDir;
 use zip::ZipArchive;
 
 pub mod metadata;
@@ -19,6 +21,7 @@ pub mod metadata;
 mod github;
 mod package;
 
+#[allow(dead_code)]
 pub struct Module<'context, 'name> {
     definition: ModuleDefinition,
     path: PathBuf,
@@ -78,15 +81,7 @@ impl<'context, 'name> Module<'context, 'name> {
             },
         };
 
-        // Extract the package.
-        let content = tempfile::tempdir().unwrap();
-        let mut extractor = ZipArchive::new(package).unwrap();
-
-        extractor.extract(&content).unwrap();
-
-        // Read definition.
-        let path = PackageReader::new(content.path()).definition();
-        let definition = ModuleDefinition::from_file(&path).unwrap();
+        let (content, definition) = Self::extract_package(package);
 
         // Check if installation can be proceed.
         let context = context
@@ -100,13 +95,9 @@ impl<'context, 'name> Module<'context, 'name> {
 
         // Install.
         let mut scope = InstallationScope::new(&path);
-        let mut options = fs_extra::dir::CopyOptions::new();
-
-        options.copy_inside = true;
-        options.content_only = true;
 
         create_dir_all(&path).unwrap();
-        fs_extra::dir::copy(&content, &path, &options).unwrap();
+        Self::install_package(&content, &path);
 
         // Write metadata.
         let metadata = MetadataManager::new(context.metadata());
@@ -124,12 +115,93 @@ impl<'context, 'name> Module<'context, 'name> {
         })
     }
 
+    pub fn update(context: &'context Context, name: Cow<'name, str>) -> Result<Self, UpdateError> {
+        // Check if module installed.
+        let context = context.modules().by_name(name);
+        let path = context.path();
+
+        if !path.exists() {
+            return Err(UpdateError::NotInstalled);
+        }
+
+        let local = ModuleDefinition::from_file(context.definition()).unwrap();
+
+        // Get registry.
+        let metadata = MetadataManager::new(context.metadata());
+        let id = metadata.read_registry().unwrap();
+
+        // Download latest package.
+        let package = match id.registry() {
+            Registry::GitHub => match github::get_latest_package(id.name()) {
+                Ok(r) => r,
+                Err(e) => return Err(UpdateError::GetPackageFailed(e.into())),
+            },
+        };
+
+        let (content, remote) = Self::extract_package(package);
+
+        // Check if the installed version already up todate.
+        if local.version >= remote.version {
+            return Err(UpdateError::AlreadyLatest);
+        }
+
+        // Update.
+        let mut scope = InstallationScope::new(&path);
+
+        for file in std::fs::read_dir(&path).unwrap().map(|i| i.unwrap()) {
+            if file.file_name() == metadata.directory() {
+                continue;
+            }
+
+            if file.file_type().unwrap().is_dir() {
+                std::fs::remove_dir_all(file.path()).unwrap();
+            } else {
+                std::fs::remove_file(file.path()).unwrap();
+            }
+        }
+
+        Self::install_package(&content, &path);
+
+        // Mark update success.
+        scope.success();
+        drop(scope);
+
+        Ok(Module {
+            path,
+            definition: remote,
+            metadata,
+        })
+    }
+
     pub fn definition(&self) -> &ModuleDefinition {
         &self.definition
     }
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    fn extract_package<F: Read + Seek>(package: F) -> (TempDir, ModuleDefinition) {
+        // Extract.
+        let content = tempfile::tempdir().unwrap();
+        let mut extractor = ZipArchive::new(package).unwrap();
+
+        extractor.extract(&content).unwrap();
+
+        // Read definition.
+        let path = PackageReader::new(content.path()).definition();
+        let definition = ModuleDefinition::from_file(&path).unwrap();
+
+        (content, definition)
+    }
+
+    fn install_package<C: AsRef<Path>, D: AsRef<Path>>(content: C, destination: D) {
+        let mut options = fs_extra::dir::CopyOptions::new();
+
+        options.copy_inside = true;
+        options.content_only = true;
+
+        fs_extra::dir::copy(content, destination, &options).unwrap();
     }
 }
 
@@ -172,6 +244,27 @@ impl Display for InstallError {
             InstallError::InvalidIdentifier => write!(f, "The package identifer is not valid"),
             InstallError::GetPackageFailed(e) => write!(f, "Failed to get the package: {}", e),
             InstallError::AlreadyInstalled => write!(f, "The module is already installed"),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum UpdateError {
+    NotInstalled,
+    GetPackageFailed(Box<dyn Error>),
+    AlreadyLatest,
+}
+
+impl Error for UpdateError {}
+
+impl Display for UpdateError {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            UpdateError::NotInstalled => write!(f, "The module is not installed"),
+            UpdateError::GetPackageFailed(e) => write!(f, "Failed to get the package: {}", e),
+            UpdateError::AlreadyLatest => {
+                write!(f, "The installed module is already latest version")
+            }
         }
     }
 }
