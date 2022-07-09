@@ -163,17 +163,24 @@ impl<'context> Engine<'context> {
                 None
             }
             config::module::Program::Binary(program) => match program.current() {
-                Some(file) => {
-                    let name = &module.definition().name;
-                    let file = module.path().join(file);
-                    let result = Self::bootstrap_native_module(lua, name, &file);
+                Some(files) => match files.current() {
+                    Some(file) => {
+                        let name = &module.definition().name;
+                        let file = module.path().join(file);
+                        let result = Self::bootstrap_native_module(lua, name, &file);
 
-                    if result.is_none() {
+                        if result.is_none() {
+                            return 1;
+                        }
+
+                        result
+                    }
+                    None => {
+                        let message = CString::new("the module cannot run with your CPU").unwrap();
+                        lua_pushstring(lua, message.as_ptr());
                         return 1;
                     }
-
-                    result
-                }
+                },
                 None => {
                     let message = CString::new("the module cannot run on this platform").unwrap();
                     lua_pushstring(lua, message.as_ptr());
