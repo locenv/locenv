@@ -16,13 +16,15 @@ jobs:
       with:
         submodules: recursive
     - name: Build
-      run: cargo install --path crates/cli --root release
+      run: cargo build
     - name: Run tests
-      run: cargo test --release
-    - name: Upload binary
+      run: cargo test
+    - name: Create artifact
+      run: cargo install --path crates/cli --root release
+    - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
-        name: binary-linux
+        name: amd64-linux
         path: release
   build-mac:
     name: Build (macOS)
@@ -33,14 +35,23 @@ jobs:
       with:
         submodules: recursive
     - name: Build
-      run: cargo install --path crates/cli --root release
+      run: cargo build
     - name: Run tests
-      run: cargo test --release
-    - name: Upload binary
+      run: cargo test
+    - name: Create Intel artifact
+      run: cargo install --path crates/cli --root release-amd64 --target x86_64-apple-darwin
+    - name: Create Apple silicon artifact
+      run: cargo install --path crates/cli --root release-aarch64 --target aarch64-apple-darwin
+    - name: Upload Intel artifact
       uses: actions/upload-artifact@v3
       with:
-        name: binary-mac
-        path: release
+        name: amd64-mac
+        path: release-amd64
+    - name: Upload Apple silicon artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: aarch64-mac
+        path: release-aarch64
   build-windows:
     name: Build (Windows)
     runs-on: windows-2022
@@ -50,11 +61,13 @@ jobs:
       with:
         submodules: recursive
     - name: Build
-      run: cargo install --path crates\cli --root release
+      run: cargo build
     - name: Run tests
-      run: cargo test --release
-    - name: Upload binary
+      run: cargo test
+    - name: Create artifact
+      run: cargo install --path crates\cli --root release
+    - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
-        name: binary-windows
+        name: amd64-windows
         path: release
