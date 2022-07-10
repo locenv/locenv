@@ -1,6 +1,5 @@
 use proc_macro::TokenStream;
-use quote::__private::Span;
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::punctuated::Punctuated;
 use syn::{
     parse_macro_input, Data, DeriveInput, Fields, Ident, Path, PathArguments, PathSegment, Type,
@@ -25,6 +24,7 @@ pub fn directory(input: TokenStream) -> TokenStream {
     // Iterate fields.
     let mut files: Vec<&Ident> = Vec::new();
     let mut types: Vec<Path> = Vec::new();
+    let mut names: Vec<String> = Vec::new();
 
     for field in &fields.named {
         let mut file = false;
@@ -45,12 +45,12 @@ pub fn directory(input: TokenStream) -> TokenStream {
                 };
 
                 p.segments.push(PathSegment {
-                    ident: Ident::new("fmap", Span::call_site()),
+                    ident: format_ident!("fmap"),
                     arguments: PathArguments::None,
                 });
 
                 p.segments.push(PathSegment {
-                    ident: Ident::new(&(t.to_string() + "File"), Span::call_site()),
+                    ident: format_ident!("{}File", t),
                     arguments: PathArguments::None,
                 });
 
@@ -61,6 +61,7 @@ pub fn directory(input: TokenStream) -> TokenStream {
 
             files.push(name);
             types.push(r#type);
+            names.push(name.to_string());
         }
     }
 
@@ -69,7 +70,7 @@ pub fn directory(input: TokenStream) -> TokenStream {
     let generics = input.generics;
     let result = quote! {
         impl #generics #ident #generics {
-            #( fn #files <'parent> (&'parent self) -> #types <'parent, Self> { #types :: new(self, &self.#files, "#files") } )*
+            #( fn #files <'parent> (&'parent self) -> #types <'parent, Self> { #types::new(self, &self.#files, #names) } )*
         }
     };
 
