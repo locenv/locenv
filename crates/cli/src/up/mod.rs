@@ -28,7 +28,7 @@ struct Service<'context, 'config, 'repo, 'state> {
 enum RunError {
     PlatformNotSupported(String),
     ServiceDefinitionOpenError(PathBuf, std::io::Error),
-    ServiceDefinitionParseError(PathBuf, serde_yaml::Error),
+    ServiceDefinitionParseError(PathBuf, Box<dyn Error>),
     BuildError(String, String),
 }
 
@@ -75,7 +75,7 @@ fn run(context: &Context, _: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
                     return Err(RunError::ServiceDefinitionOpenError(def, e).into())
                 }
                 FromFileError::ParseFailed(e) => {
-                    return Err(RunError::ServiceDefinitionParseError(def, e).into())
+                    return Err(RunError::ServiceDefinitionParseError(def, e.into()).into())
                 }
             },
         };

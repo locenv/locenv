@@ -591,7 +591,6 @@ dependencies = [
  "module",
  "repository",
  "script",
- "serde_yaml",
  "state",
 ]
 

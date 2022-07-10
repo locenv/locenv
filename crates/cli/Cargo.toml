@@ -11,5 +11,4 @@ manager = { path = "../manager" }
 module = { path = "../module" }
 repository = { path = "../repository" }
 script = { path = "../script" }
-serde_yaml = "0.8"
 state = { path = "../state" }
