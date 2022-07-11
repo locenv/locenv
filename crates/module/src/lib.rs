@@ -1,8 +1,8 @@
+pub use self::definition::ModuleDefinition;
 pub use self::package::PackageId;
 
 use self::metadata::MetadataManager;
 use self::package::{InstallationScope, PackageReader, Registry};
-use config::module::ModuleDefinition;
 use context::modules::module::ModuleContent;
 use context::Context;
 use std::borrow::Cow;
@@ -16,6 +16,7 @@ use std::path::PathBuf;
 use tempfile::TempDir;
 use zip::ZipArchive;
 
+pub mod definition;
 pub mod metadata;
 
 mod github;
@@ -31,7 +32,7 @@ pub struct Module<'context, 'name> {
 #[derive(Debug)]
 pub enum FindError {
     NotInstalled(PathBuf),
-    LoadDefinitionFailed(PathBuf, config::FromFileError),
+    LoadDefinitionFailed(PathBuf, yaml::FileError),
 }
 
 #[derive(Debug)]
@@ -55,10 +56,8 @@ impl<'context, 'name> Module<'context, 'name> {
 
         // Load module definition.
         let file = context.definition();
-        let definition = match ModuleDefinition::from_file(&file) {
-            Ok(r) => r,
-            Err(e) => return Err(FindError::LoadDefinitionFailed(file, e)),
-        };
+        let definition: ModuleDefinition =
+            yaml::load_file(&file).map_err(|e| FindError::LoadDefinitionFailed(file, e))?;
 
         Ok(Module {
             definition,
@@ -124,7 +123,7 @@ impl<'context, 'name> Module<'context, 'name> {
             return Err(UpdateError::NotInstalled);
         }
 
-        let local = ModuleDefinition::from_file(context.definition()).unwrap();
+        let local: ModuleDefinition = yaml::load_file(context.definition()).unwrap();
 
         // Get registry.
         let metadata = MetadataManager::new(context.metadata());
@@ -190,7 +189,7 @@ impl<'context, 'name> Module<'context, 'name> {
 
         // Read definition.
         let path = PackageReader::new(content.path()).definition();
-        let definition = ModuleDefinition::from_file(&path).unwrap();
+        let definition: ModuleDefinition = yaml::load_file(&path).unwrap();
 
         (content, definition)
     }

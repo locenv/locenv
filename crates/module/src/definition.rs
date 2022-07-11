@@ -1,7 +1,6 @@
-use config_macros::Config;
 use serde::Deserialize;
 
-#[derive(Config, Deserialize)]
+#[derive(Deserialize)]
 pub struct ModuleDefinition {
     pub name: String,
     pub version: u32,
@@ -15,6 +14,7 @@ pub enum Program {
     Binary(BinaryProgram),
 }
 
+/// Represents native programs for each platform.
 #[derive(Deserialize)]
 pub struct BinaryProgram {
     pub linux: Option<BinaryFiles>,
@@ -39,6 +39,7 @@ impl BinaryProgram {
     }
 }
 
+/// Represents native programs for each CPU type.
 #[derive(Deserialize)]
 pub struct BinaryFiles {
     pub aarch64: Option<String>,

@@ -133,12 +133,12 @@ impl<'context> Engine<'context> {
                     return 1;
                 }
                 module::FindError::LoadDefinitionFailed(f, e) => match e {
-                    config::FromFileError::OpenFailed(e) => {
+                    yaml::FileError::OpenFailed(e) => {
                         let message = cfmt!("cannot open {}: {}", f.display(), e);
                         lua_pushstring(lua, message.as_ptr());
                         return 1;
                     }
-                    config::FromFileError::ParseFailed(e) => {
+                    yaml::FileError::ParseFailed(e) => {
                         let message = cfmt!("cannot parse {}: {}", f.display(), e);
                         lua_pushstring(lua, message.as_ptr());
                         return 1;
@@ -149,7 +149,7 @@ impl<'context> Engine<'context> {
 
         // Load the module.
         let native: Option<Library> = match &module.definition().program {
-            config::module::Program::Script(file) => {
+            module::definition::Program::Script(file) => {
                 let path = module.path().join(file);
                 let file = CString::new(path.to_str().unwrap()).unwrap();
                 let status = luaL_loadfilex(lua, file.as_ptr(), null());
@@ -162,7 +162,7 @@ impl<'context> Engine<'context> {
                 lua_pushstring(lua, file.as_ptr());
                 None
             }
-            config::module::Program::Binary(program) => match program.current() {
+            module::definition::Program::Binary(program) => match program.current() {
                 Some(files) => match files.current() {
                     Some(file) => {
                         let name = &module.definition().name;

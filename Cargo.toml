@@ -13,6 +13,7 @@ members = [
     "crates/repository",
     "crates/script",
     "crates/state",
+    "crates/yaml"
 ]
 
 default-members = ["crates/cli"]

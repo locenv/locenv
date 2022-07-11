@@ -650,7 +650,6 @@ dependencies = [
 name = "module"
 version = "0.1.0"
 dependencies = [
- "config",
  "context",
  "fmap",
  "fmap-macros",
@@ -658,6 +657,7 @@ dependencies = [
  "http",
  "serde",
  "tempfile",
+ "yaml",
  "zip",
 ]
 
@@ -863,11 +863,11 @@ dependencies = [
 name = "script"
 version = "0.1.0"
 dependencies = [
- "config",
  "context",
  "libloading",
  "lua",
  "module",
+ "yaml",
 ]
 
 [[package]]
@@ -1205,6 +1205,14 @@ name = "windows_x86_64_msvc"
 version = "0.36.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c811ca4a8c853ef420abd8592ba53ddbbac90410fab6903b3e79972a631f7680"
+
+[[package]]
+name = "yaml"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_yaml",
+]
 
 [[package]]
 name = "yaml-rust"

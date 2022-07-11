@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-config = { path = "../config" }
 context = { path = "../context" }
 fmap = { path = "../fmap" }
 fmap-macros = { path = "../fmap-macros" }
@@ -12,4 +11,5 @@ fs_extra = "1.2"
 http = { path = "../http" }
 serde = "1.0"
 tempfile = "3.3"
+yaml = { path = "../yaml" }
 zip = "0.6"
