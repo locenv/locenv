@@ -21,6 +21,7 @@ pub enum Header<'c> {
     ReferrerPolicy,
     Server,
     StrictTransportSecurity,
+    TransferEncoding,
     Vary,
     Via,
     Custom(Cow<'c, str>),
@@ -56,6 +57,7 @@ impl<'c> FromStr for Header<'c> {
             "referrer-policy" => Header::ReferrerPolicy,
             "server" => Header::Server,
             "strict-transport-security" => Header::StrictTransportSecurity,
+            "transfer-encoding" => Header::TransferEncoding,
             "vary" => Header::Vary,
             "via" => Header::Via,
             v => {
