@@ -3,7 +3,7 @@ pub use self::package::PackageId;
 
 use self::metadata::MetadataManager;
 use self::package::{InstallationScope, PackageReader, Registry};
-use context::modules::module::ModuleContent;
+use context::data::ModuleDirectory;
 use context::Context;
 use std::borrow::Cow;
 use std::error::Error;
@@ -35,18 +35,9 @@ pub enum FindError {
     LoadDefinitionFailed(PathBuf, yaml::FileError),
 }
 
-#[derive(Debug)]
-pub enum InstallError {
-    InvalidIdentifier,
-    GetPackageFailed(Box<dyn Error>),
-    AlreadyInstalled,
-}
-
-// Module
-
 impl<'context, 'name> Module<'context, 'name> {
     pub fn find(context: &'context Context, name: Cow<'name, str>) -> Result<Self, FindError> {
-        let context = context.modules().by_name(name);
+        let context = context.data().module().by_name(name);
         let path = context.path();
 
         // Check if module directory exists.
@@ -84,12 +75,13 @@ impl<'context, 'name> Module<'context, 'name> {
 
         // Check if installation can be proceed.
         let context = context
-            .modules()
+            .data()
+            .module()
             .by_name(Cow::Owned(definition.name.clone()));
         let path = context.path();
 
         if path.exists() {
-            return Err(InstallError::AlreadyInstalled);
+            return Err(InstallError::AlreadyInstalled(definition.name.clone()));
         }
 
         // Install.
@@ -101,7 +93,7 @@ impl<'context, 'name> Module<'context, 'name> {
         // Write metadata.
         let metadata = MetadataManager::new(context.metadata());
 
-        metadata.write_registry(&id);
+        metadata.registry().write(&id).unwrap();
 
         // Mark installation success.
         scope.success();
@@ -116,7 +108,7 @@ impl<'context, 'name> Module<'context, 'name> {
 
     pub fn update(context: &'context Context, name: Cow<'name, str>) -> Result<Self, UpdateError> {
         // Check if module installed.
-        let context = context.modules().by_name(name);
+        let context = context.data().module().by_name(name);
         let path = context.path();
 
         if !path.exists() {
@@ -127,7 +119,7 @@ impl<'context, 'name> Module<'context, 'name> {
 
         // Get registry.
         let metadata = MetadataManager::new(context.metadata());
-        let id = metadata.read_registry().unwrap();
+        let id = metadata.registry().read().unwrap();
 
         // Download latest package.
         let package = match id.registry() {
@@ -148,7 +140,7 @@ impl<'context, 'name> Module<'context, 'name> {
         let mut scope = InstallationScope::new(&path);
 
         for file in std::fs::read_dir(&path).unwrap().map(|i| i.unwrap()) {
-            if file.file_name() == metadata.directory() {
+            if file.file_name() == metadata.directory_name() {
                 continue;
             }
 
@@ -218,8 +210,6 @@ impl<'context, 'name> PartialEq for Module<'context, 'name> {
     }
 }
 
-// FindError
-
 impl Error for FindError {}
 
 impl Display for FindError {
@@ -233,37 +223,14 @@ impl Display for FindError {
     }
 }
 
-// InstallError
-
-impl Error for InstallError {}
-
-impl Display for InstallError {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            InstallError::InvalidIdentifier => write!(f, "The package identifer is not valid"),
-            InstallError::GetPackageFailed(e) => write!(f, "Failed to get the package: {}", e),
-            InstallError::AlreadyInstalled => write!(f, "The module is already installed"),
-        }
-    }
+pub enum InstallError {
+    InvalidIdentifier,
+    GetPackageFailed(Box<dyn Error>),
+    AlreadyInstalled(String),
 }
 
-#[derive(Debug)]
 pub enum UpdateError {
     NotInstalled,
     GetPackageFailed(Box<dyn Error>),
     AlreadyLatest,
-}
-
-impl Error for UpdateError {}
-
-impl Display for UpdateError {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            UpdateError::NotInstalled => write!(f, "The module is not installed"),
-            UpdateError::GetPackageFailed(e) => write!(f, "Failed to get the package: {}", e),
-            UpdateError::AlreadyLatest => {
-                write!(f, "The installed module is already latest version")
-            }
-        }
-    }
 }

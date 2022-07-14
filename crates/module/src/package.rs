@@ -1,11 +1,11 @@
-use context::modules::module::ModuleContent;
+use context::data::ModuleDirectory;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::fs::remove_dir_all;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Registry {
     GitHub,
 }
@@ -14,7 +14,7 @@ pub enum RegistryError {
     Invalid,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PackageId {
     registry: Registry,
     name: String,
@@ -124,7 +124,7 @@ impl<'content> PackageReader<'content> {
     }
 }
 
-impl<'content> ModuleContent for PackageReader<'content> {
+impl<'content> ModuleDirectory for PackageReader<'content> {
     fn path(&self) -> PathBuf {
         self.content.into()
     }

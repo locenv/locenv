@@ -3,16 +3,22 @@
 This is a cross-platform tool to spinup services for development from a unified configuration file similar to Docker Compose but the services run directly on
 the host instead of container. Thus no virtual machine is required on macOS and Windows.
 
+**This project is not fully functional yet and it is under development.**
+
 ## Usage
 
 ### Sample configurations
 
 ```yaml
 # locenv-services.yml
-sample-c:
-  repository:
-    type: git
-    uri: https://github.com/locenv/sample-c.git
+configurations:
+  sample-c:
+    repository:
+      uri: https://github.com/locenv/sample-c.git
+      type: git
+instances:
+  sample-c:
+    configuration: sample-c
 ```
 
 ### Start services

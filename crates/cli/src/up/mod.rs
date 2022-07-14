@@ -1,88 +1,146 @@
-use crate::command::Command;
-use config::service::PlatformConfigurations;
-use config::{FromFileError, Services};
+use crate::{Command, ServiceManagerState, SUCCESS};
 use context::Context;
-use state::StateManager;
+use service::{ApplicationConfiguration, PlatformConfigurations, ServiceDefinition};
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::error::Error;
-use std::fmt::{Display, Formatter};
-use std::path::PathBuf;
+use std::time::SystemTime;
 
-pub fn command() -> Command {
-    Command {
-        name: "up",
-        specs: |name| clap::Command::new(name).about("Start all services"),
-        manager_running: Some(false),
-        run,
-    }
-}
+pub(crate) const COMMAND: Command = Command {
+    name: "up",
+    specs: |name| clap::Command::new(name).about("Start all services"),
+    run,
+    service_manager_state: Some(ServiceManagerState::Stopped),
+};
 
-struct Service<'context, 'config, 'repo, 'state> {
-    conf: &'config config::services::Service,
-    repo: context::runtime::repositories::repository::Repository<'context, 'repo>,
-    state: StateManager<'context, 'state>,
-}
+pub const OPEN_CONFIGURATION_FAILED: u8 = 1;
+pub const READ_CONFIGURATION_FAILED: u8 = 2;
+pub const INVALID_REPOSITORY_OPTION: u8 = 3;
+pub const GIT_CLONE_FAILED: u8 = 4;
+pub const GIT_OPEN_FAILED: u8 = 5;
+pub const GIT_PULL_FAILED: u8 = 6;
+pub const OPEN_DEFINITION_FAILED: u8 = 50;
+pub const READ_DEFINITION_FAILED: u8 = 51;
+pub const PLATFORM_NOT_SUPPORTED: u8 = 52;
+pub const DUPLICATED_CONFIGURATION: u8 = 53;
+pub const BUILD_FAILED: u8 = 54;
 
-#[derive(Debug)]
-enum RunError {
-    PlatformNotSupported(String),
-    ServiceDefinitionOpenError(PathBuf, std::io::Error),
-    ServiceDefinitionParseError(PathBuf, Box<dyn Error>),
-    BuildError(String, String),
-}
-
-fn run(context: &Context, _: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
+fn run(context: &Context, _: &clap::ArgMatches) -> u8 {
     // Load config.
-    let conf = Services::from_file(context.project().services_config())?;
+    let path = context.project().services();
+    let config: ApplicationConfiguration = match yaml::load_file(&path) {
+        Ok(r) => r,
+        Err(e) => {
+            return match e {
+                yaml::FileError::OpenFailed(e) => {
+                    eprintln!("Failed to open {}: {}", path.display(), e);
+                    OPEN_CONFIGURATION_FAILED
+                }
+                yaml::FileError::ParseFailed(e) => {
+                    eprintln!("Failed to read {}: {}", path.display(), e);
+                    READ_CONFIGURATION_FAILED
+                }
+            }
+        }
+    };
 
-    // Download repositories.
-    let mut services: HashMap<&str, Service> = HashMap::new();
+    // Download and build repositories.
+    let mut services: HashMap<&str, PlatformConfigurations> = HashMap::new();
 
-    for (name, conf) in &conf {
-        let service = Service {
-            conf,
-            repo: context
-                .runtime()
-                .repositories()
-                .by_name(Cow::Borrowed(name)),
-            state: StateManager::new(context.runtime().states().by_name(Cow::Borrowed(name))),
-        };
+    for (name, config) in &config.configurations {
+        let repo = context
+            .runtime()
+            .configurations()
+            .by_name(Cow::Borrowed(name.as_str()));
+        let path = repo.path();
+        let service_definition = repo.service_definition();
+        let state = repo.build_state();
 
         // Download.
-        let path = service.repo.path();
+        let build: bool = if !path.exists() {
+            println!("Downloading {} to {}...", name, path.display());
 
-        if !path.is_dir() {
-            println!("Downloading {} to {}", name, path.display());
-            repository::download(&path, &service.conf.repository)?;
-            service.state.clear();
-        }
+            if let Err(e) = service::repository::download(&config.repository, &path) {
+                return match e {
+                    service::repository::DownloadError::InvalidOption(name) => {
+                        eprintln!("Invalid value for repository option '{}'", name);
+                        INVALID_REPOSITORY_OPTION
+                    }
+                    service::repository::DownloadError::GitCloneFailed(e) => {
+                        eprintln!("Failed to clone the repository: {}", e);
+                        GIT_CLONE_FAILED
+                    }
+                };
+            }
 
-        services.insert(name, service);
-    }
+            true
+        } else if !state.built_time().path().exists() {
+            println!("Updating {}...", name);
 
-    // Build & run.
-    for (name, service) in services {
-        // Load service definition.
-        let def = service.repo.service_definition();
-        let conf = match PlatformConfigurations::from_service_definition_file(&def) {
-            Ok(r) => match r {
-                Some(v) => v,
-                None => return Err(RunError::PlatformNotSupported(name.into()).into()),
-            },
-            Err(e) => match e {
-                FromFileError::OpenFailed(e) => {
-                    return Err(RunError::ServiceDefinitionOpenError(def, e).into())
+            if let Err(e) = service::repository::update(&config.repository, &path) {
+                return match e {
+                    service::repository::UpdateError::InvalidOption(name) => {
+                        eprintln!("Invalid value for repository option '{}'", name);
+                        INVALID_REPOSITORY_OPTION
+                    }
+                    service::repository::UpdateError::GitOpenFailed(e) => {
+                        eprintln!(
+                            "Failed to open {} as a Git repository: {}",
+                            path.display(),
+                            e
+                        );
+                        GIT_OPEN_FAILED
+                    }
+                    service::repository::UpdateError::GitFindOriginFailed(e) => {
+                        eprintln!(
+                            "Failed to find 'origin' remote on repository {}: {}",
+                            path.display(),
+                            e
+                        );
+                        GIT_PULL_FAILED
+                    }
+                    service::repository::UpdateError::GitFetchOriginFailed(e) => {
+                        eprintln!("Failed to pull {}: {}", path.display(), e);
+                        GIT_PULL_FAILED
+                    }
+                };
+            }
+
+            true
+        } else {
+            false
+        };
+
+        // Read service definition.
+        let service: ServiceDefinition = match yaml::load_file(&service_definition) {
+            Ok(r) => r,
+            Err(e) => {
+                return match e {
+                    yaml::FileError::OpenFailed(e) => {
+                        eprintln!("Failed to open {}: {}", service_definition.display(), e);
+                        OPEN_DEFINITION_FAILED
+                    }
+                    yaml::FileError::ParseFailed(e) => {
+                        eprintln!("Failed to read {}: {}", service_definition.display(), e);
+                        READ_DEFINITION_FAILED
+                    }
                 }
-                FromFileError::ParseFailed(e) => {
-                    return Err(RunError::ServiceDefinitionParseError(def, e.into()).into())
-                }
-            },
+            }
+        };
+
+        let service = match service.flatten() {
+            Some(v) => v,
+            None => {
+                eprintln!(
+                    "The repository for configuration '{}' does not support this platform",
+                    name
+                );
+                return PLATFORM_NOT_SUPPORTED;
+            }
         };
 
         // Build.
-        if service.state.read_built_time().is_none() {
-            if let Some(script) = &conf.build {
+        if build {
+            if let Some(script) = &service.build {
                 let mut engine = script::Engine::new(context);
 
                 println!("Building {}", name);
@@ -93,30 +151,19 @@ fn run(context: &Context, _: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
                         script::RunError::ExecError(m) => m,
                     };
 
-                    return Err(RunError::BuildError(name.into(), msg).into());
+                    eprintln!("{}", msg);
+                    return BUILD_FAILED;
                 }
             }
+
+            state.built_time().write(&SystemTime::now()).unwrap();
+        }
+
+        if services.insert(&name, service).is_some() {
+            eprintln!("Duplicated configuration '{}'", name);
+            return DUPLICATED_CONFIGURATION;
         }
     }
 
-    Ok(())
-}
-
-// RunError
-
-impl Error for RunError {}
-
-impl Display for RunError {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            Self::PlatformNotSupported(s) => write!(f, "Service {} cannot run on this system", s),
-            Self::ServiceDefinitionOpenError(p, e) => {
-                write!(f, "Failed to open {}: {}", p.display(), e)
-            }
-            Self::ServiceDefinitionParseError(p, e) => {
-                write!(f, "Failed to parse {}: {}", p.display(), e)
-            }
-            Self::BuildError(_, e) => write!(f, "{}", e),
-        }
-    }
+    SUCCESS
 }

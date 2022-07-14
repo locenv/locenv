@@ -1,18 +1,14 @@
 [workspace]
 members = [
     "crates/cli",
-    "crates/config",
-    "crates/config-macros",
     "crates/context",
     "crates/fmap",
     "crates/fmap-macros",
     "crates/http",
     "crates/lua",
-    "crates/manager",
     "crates/module",
-    "crates/repository",
     "crates/script",
-    "crates/state",
+    "crates/service",
     "crates/yaml"
 ]
 

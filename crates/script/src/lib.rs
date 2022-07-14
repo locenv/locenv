@@ -11,9 +11,7 @@ use lua::{
 use module::Module;
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::error::Error;
 use std::ffi::{c_void, CStr, CString};
-use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
 use std::mem::transmute;
 use std::os::raw::{c_char, c_int};
@@ -301,21 +299,9 @@ impl<'context> Drop for Engine<'context> {
 }
 
 /// Represents the error from execution of a Lua script.
-#[derive(Debug)]
 pub enum RunError {
     LoadError(String),
     ExecError(String),
-}
-
-impl Error for RunError {}
-
-impl Display for RunError {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            Self::LoadError(e) => write!(f, "Failed to load script: {}", e),
-            Self::ExecError(e) => write!(f, "Failed to execute script: {}", e),
-        }
-    }
 }
 
 type ModuleTable<'context> = HashMap<Module<'context, 'static>, Option<Library>>;

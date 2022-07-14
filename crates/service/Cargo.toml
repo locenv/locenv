@@ -1,9 +1,11 @@
 [package]
-name = "repository"
+name = "service"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-config = { path = "../config" }
-dirs = "4"
+dirs = "4.0"
 git2 = { version = "0.14", features = ["ssh", "https", "vendored-libgit2", "ssh_key_from_memory"] }
+serde = "1.0"
+serde_yaml = "0.8"
+url = { version = "2.2", features = ["serde"] }

@@ -5,10 +5,8 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "3.2", features = ["cargo"] }
-config = { path = "../config" }
 context = { path = "../context" }
-manager = { path = "../manager" }
 module = { path = "../module" }
-repository = { path = "../repository" }
 script = { path = "../script" }
-state = { path = "../state" }
+service = { path = "../service" }
+yaml = { path = "../yaml" }
