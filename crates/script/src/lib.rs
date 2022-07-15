@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use std::ffi::{c_void, CStr, CString};
 use std::marker::PhantomData;
 use std::mem::transmute;
-use std::os::raw::{c_char, c_int};
+use std::os::raw::c_int;
 use std::path::Path;
 use std::ptr::{null, null_mut};
 
@@ -163,9 +163,16 @@ impl<'context> Engine<'context> {
             module::definition::Program::Binary(program) => match program.current() {
                 Some(files) => match files.current() {
                     Some(file) => {
-                        let name = &module.definition().name;
+                        let name = CString::new(module.definition().name.as_str()).unwrap();
                         let file = module.path().join(file);
-                        let result = Self::bootstrap_native_module(lua, name, &file);
+                        let context = api::BootstrapContext {
+                            revision: 0,
+                            name: name.as_ptr(),
+                            locenv: transmute(context),
+                            lua,
+                        };
+
+                        let result = Self::bootstrap_native_module(&context, &file);
 
                         if result.is_none() {
                             return 1;
@@ -196,13 +203,16 @@ impl<'context> Engine<'context> {
         2
     }
 
-    fn bootstrap_native_module(lua: *mut lua_State, name: &str, file: &Path) -> Option<Library> {
+    fn bootstrap_native_module(
+        context: *const api::BootstrapContext,
+        file: &Path,
+    ) -> Option<Library> {
         // Load the module.
         let library = match unsafe { Library::new(&file) } {
             Ok(r) => r,
             Err(e) => {
                 let message = cfmt!("cannot load {}: {}", file.display(), e);
-                unsafe { lua_pushstring(lua, message.as_ptr()) };
+                unsafe { lua_pushstring((*context).lua, message.as_ptr()) };
                 return None;
             }
         };
@@ -216,15 +226,13 @@ impl<'context> Engine<'context> {
                     file.display(),
                     e
                 );
-                unsafe { lua_pushstring(lua, message.as_ptr()) };
+                unsafe { lua_pushstring((*context).lua, message.as_ptr()) };
                 return None;
             }
         };
 
         // Bootstrap the module.
-        let name = CString::new(name).unwrap();
-
-        match unsafe { bootstrap(lua, name.as_ptr(), &api::TABLE) } {
+        match unsafe { bootstrap(context, &api::TABLE) } {
             1 => None,
             2 => Some(library),
             _ => panic!(
@@ -307,4 +315,4 @@ pub enum RunError {
 type ModuleTable<'context> = HashMap<Module<'context, 'static>, Option<Library>>;
 type LuaFunction = unsafe extern "C" fn(*mut lua_State) -> c_int;
 type ModuleBootstrap =
-    unsafe extern "C" fn(*mut lua_State, *const c_char, *const api::Table) -> c_int;
+    unsafe extern "C" fn(*const api::BootstrapContext, *const api::Table) -> c_int;

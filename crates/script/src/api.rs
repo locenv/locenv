@@ -117,7 +117,6 @@ pub const TABLE: Table = Table {
 #[repr(C)]
 pub struct Table {
     revision: u32,
-
     lua_pushboolean: unsafe extern "C" fn(*mut lua_State, c_int),
     lua_pushcclosure: unsafe extern "C" fn(*mut lua_State, lua_CFunction, c_int),
     lua_pushfstring: unsafe extern "C" fn(*mut lua_State, *const c_char, ...) -> *const c_char,
@@ -133,7 +132,6 @@ pub struct Table {
         unsafe extern "C" fn(*mut lua_State, *const c_char, *mut c_void) -> *const c_char,
     lua_createtable: unsafe extern "C" fn(*mut lua_State, c_int, c_int),
     lua_newuserdatauv: unsafe extern "C" fn(*mut lua_State, size_t, c_int) -> *mut c_void,
-
     lua_settable: unsafe extern "C" fn(*mut lua_State, c_int),
     lua_rawset: unsafe extern "C" fn(*mut lua_State, c_int),
     lua_seti: unsafe extern "C" fn(*mut lua_State, c_int, lua_Integer),
@@ -142,7 +140,6 @@ pub struct Table {
     lua_rawsetp: unsafe extern "C" fn(*mut lua_State, c_int, *const c_void),
     lua_setmetatable: unsafe extern "C" fn(*mut lua_State, c_int) -> c_int,
     lua_setiuservalue: unsafe extern "C" fn(*mut lua_State, c_int, c_int) -> c_int,
-
     lua_iscfunction: unsafe extern "C" fn(*mut lua_State, c_int) -> c_int,
     lua_isinteger: unsafe extern "C" fn(*mut lua_State, c_int) -> c_int,
     lua_isnumber: unsafe extern "C" fn(*mut lua_State, c_int) -> c_int,
@@ -151,7 +148,6 @@ pub struct Table {
     lua_type: unsafe extern "C" fn(*mut lua_State, c_int) -> c_int,
     lua_typename: unsafe extern "C" fn(*mut lua_State, c_int) -> *const c_char,
     lua_getmetatable: unsafe extern "C" fn(*mut lua_State, c_int) -> c_int,
-
     lua_toboolean: unsafe extern "C" fn(*mut lua_State, c_int) -> c_int,
     lua_tocfunction: unsafe extern "C" fn(*mut lua_State, c_int) -> lua_CFunction,
     lua_tointegerx: unsafe extern "C" fn(*mut lua_State, c_int, *mut c_int) -> lua_Integer,
@@ -160,7 +156,6 @@ pub struct Table {
     lua_topointer: unsafe extern "C" fn(*mut lua_State, c_int) -> *const c_void,
     lua_tothread: unsafe extern "C" fn(*mut lua_State, c_int) -> *mut lua_State,
     lua_touserdata: unsafe extern "C" fn(*mut lua_State, c_int) -> *mut c_void,
-
     lua_geti: unsafe extern "C" fn(*mut lua_State, c_int, lua_Integer) -> c_int,
     lua_rawgeti: unsafe extern "C" fn(*mut lua_State, c_int, lua_Integer) -> c_int,
     lua_gettable: unsafe extern "C" fn(*mut lua_State, c_int) -> c_int,
@@ -169,13 +164,10 @@ pub struct Table {
     lua_rawgetp: unsafe extern "C" fn(*mut lua_State, c_int, *const c_void) -> c_int,
     lua_next: unsafe extern "C" fn(*mut lua_State, c_int) -> c_int,
     lua_getiuservalue: unsafe extern "C" fn(*mut lua_State, c_int, c_int) -> c_int,
-
     lua_getglobal: unsafe extern "C" fn(*mut lua_State, *const c_char) -> c_int,
     lua_setglobal: unsafe extern "C" fn(*mut lua_State, *const c_char),
-
     lua_gettop: unsafe extern "C" fn(*mut lua_State) -> c_int,
     lua_settop: unsafe extern "C" fn(*mut lua_State, c_int),
-
     lua_callk: unsafe extern "C" fn(*mut lua_State, c_int, c_int, lua_KContext, lua_KFunction),
     lua_pcallk: unsafe extern "C" fn(
         *mut lua_State,
@@ -187,20 +179,16 @@ pub struct Table {
     ) -> c_int,
     lua_error: unsafe extern "C" fn(*mut lua_State) -> c_int,
     lua_warning: unsafe extern "C" fn(*mut lua_State, *const c_char, c_int),
-
     lua_checkstack: unsafe extern "C" fn(*mut lua_State, c_int) -> c_int,
     lua_absindex: unsafe extern "C" fn(*mut lua_State, c_int) -> c_int,
     lua_copy: unsafe extern "C" fn(*mut lua_State, c_int, c_int),
     lua_rotate: unsafe extern "C" fn(*mut lua_State, c_int, c_int),
-
     lua_len: unsafe extern "C" fn(*mut lua_State, c_int),
     lua_rawlen: unsafe extern "C" fn(*mut lua_State, c_int) -> lua_Unsigned,
     lua_compare: unsafe extern "C" fn(*mut lua_State, c_int, c_int, c_int) -> c_int,
     lua_rawequal: unsafe extern "C" fn(*mut lua_State, c_int, c_int) -> c_int,
-
     lua_arith: unsafe extern "C" fn(*mut lua_State, c_int),
     lua_concat: unsafe extern "C" fn(*mut lua_State, c_int),
-
     lua_load: unsafe extern "C" fn(
         *mut lua_State,
         lua_Reader,
@@ -209,15 +197,12 @@ pub struct Table {
         *const c_char,
     ) -> c_int,
     lua_dump: unsafe extern "C" fn(*mut lua_State, lua_Writer, *mut c_void, c_int) -> c_int,
-
     lua_toclose: unsafe extern "C" fn(*mut lua_State, c_int),
     lua_closeslot: unsafe extern "C" fn(*mut lua_State, c_int),
-
     lua_stringtonumber: unsafe extern "C" fn(*mut lua_State, *const c_char) -> size_t,
     lua_getallocf: unsafe extern "C" fn(*mut lua_State, *mut *mut c_void) -> lua_Alloc,
     lua_gc: unsafe extern "C" fn(*mut lua_State, c_int, ...) -> c_int,
     lua_version: unsafe extern "C" fn(*mut lua_State) -> lua_Number,
-
     aux_checkany: unsafe extern "C" fn(*mut lua_State, c_int),
     aux_checkinteger: unsafe extern "C" fn(*mut lua_State, c_int) -> lua_Integer,
     aux_checklstring: unsafe extern "C" fn(*mut lua_State, c_int, *mut size_t) -> *const c_char,
@@ -229,26 +214,21 @@ pub struct Table {
     aux_checktype: unsafe extern "C" fn(*mut lua_State, c_int, c_int),
     aux_typeerror: unsafe extern "C" fn(*mut lua_State, c_int, *const c_char) -> c_int,
     aux_argerror: unsafe extern "C" fn(*mut lua_State, c_int, *const c_char) -> c_int,
-
     aux_optinteger: unsafe extern "C" fn(*mut lua_State, c_int, lua_Integer) -> lua_Integer,
     aux_optlstring:
         unsafe extern "C" fn(*mut lua_State, c_int, *const c_char, *mut size_t) -> *const c_char,
     aux_optnumber: unsafe extern "C" fn(*mut lua_State, c_int, lua_Number) -> lua_Number,
-
     aux_error: unsafe extern "C" fn(*mut lua_State, *const c_char, ...) -> c_int,
     aux_checkstack: unsafe extern "C" fn(*mut lua_State, c_int, *const c_char),
     aux_tolstring: unsafe extern "C" fn(*mut lua_State, c_int, *mut size_t) -> *const c_char,
-
     aux_len: unsafe extern "C" fn(*mut lua_State, c_int) -> lua_Integer,
     aux_getsubtable: unsafe extern "C" fn(*mut lua_State, c_int, *const c_char) -> c_int,
     aux_ref: unsafe extern "C" fn(*mut lua_State, c_int) -> c_int,
     aux_unref: unsafe extern "C" fn(*mut lua_State, c_int, c_int),
-
     aux_newmetatable: unsafe extern "C" fn(*mut lua_State, *const c_char) -> c_int,
     aux_setmetatable: unsafe extern "C" fn(*mut lua_State, *const c_char),
     aux_callmeta: unsafe extern "C" fn(*mut lua_State, c_int, *const c_char) -> c_int,
     aux_getmetafield: unsafe extern "C" fn(*mut lua_State, c_int, *const c_char) -> c_int,
-
     aux_loadstring: unsafe extern "C" fn(*mut lua_State, *const c_char) -> c_int,
     aux_loadfilex: unsafe extern "C" fn(*mut lua_State, *const c_char, *const c_char) -> c_int,
     aux_loadbufferx: unsafe extern "C" fn(
@@ -258,7 +238,6 @@ pub struct Table {
         *const c_char,
         *const c_char,
     ) -> c_int,
-
     aux_setfuncs: unsafe extern "C" fn(*mut lua_State, *const luaL_Reg, c_int),
     aux_where: unsafe extern "C" fn(*mut lua_State, c_int),
     aux_traceback: unsafe extern "C" fn(*mut lua_State, *mut lua_State, *const c_char, c_int),
@@ -270,4 +249,12 @@ pub struct Table {
     ) -> *const c_char,
     aux_execresult: unsafe extern "C" fn(*mut lua_State, c_int) -> c_int,
     aux_fileresult: unsafe extern "C" fn(*mut lua_State, c_int, *const c_char) -> c_int,
+}
+
+#[repr(C)]
+pub struct BootstrapContext {
+    pub revision: u32,
+    pub name: *const c_char,
+    pub locenv: *const c_void,
+    pub lua: *mut lua_State,
 }
