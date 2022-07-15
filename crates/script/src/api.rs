@@ -1,8 +1,11 @@
+use context::Context;
 use lua::{
     luaL_Reg, lua_Alloc, lua_CFunction, lua_Integer, lua_KContext, lua_KFunction, lua_Number,
     lua_Reader, lua_State, lua_Unsigned, lua_Writer, size_t,
 };
-use std::ffi::c_void;
+use std::borrow::Cow;
+use std::ffi::{c_void, CStr, CString};
+use std::mem::transmute;
 use std::os::raw::{c_char, c_int};
 
 pub const TABLE: Table = Table {
@@ -112,6 +115,7 @@ pub const TABLE: Table = Table {
     aux_gsub: lua::luaL_gsub,
     aux_execresult: lua::luaL_execresult,
     aux_fileresult: lua::luaL_fileresult,
+    module_configurations_path,
 };
 
 #[repr(C)]
@@ -249,6 +253,8 @@ pub struct Table {
     ) -> *const c_char,
     aux_execresult: unsafe extern "C" fn(*mut lua_State, c_int) -> c_int,
     aux_fileresult: unsafe extern "C" fn(*mut lua_State, c_int, *const c_char) -> c_int,
+    module_configurations_path:
+        unsafe extern "C" fn(*const c_void, *const c_char, *mut c_char, u32) -> u32,
 }
 
 #[repr(C)]
@@ -257,4 +263,29 @@ pub struct BootstrapContext {
     pub name: *const c_char,
     pub locenv: *const c_void,
     pub lua: *mut lua_State,
+}
+
+unsafe extern "C" fn module_configurations_path(
+    context: *const c_void,
+    name: *const c_char,
+    buffer: *mut c_char,
+    size: u32,
+) -> u32 {
+    let context: &Context = transmute(context);
+    let name = CStr::from_ptr(name).to_str().unwrap();
+    let config = context
+        .data()
+        .config()
+        .for_module(Cow::Borrowed(name))
+        .path();
+    let path = config.to_str().unwrap();
+    let length = (path.len() + 1) as u32;
+
+    if size >= length {
+        let source = CString::new(path).unwrap();
+
+        buffer.copy_from_nonoverlapping(source.as_ptr(), length as usize);
+    }
+
+    length
 }

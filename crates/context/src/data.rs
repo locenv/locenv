@@ -92,3 +92,43 @@ impl<'context, 'module> ModuleMetadata<'context, 'module> {
         path
     }
 }
+
+/// Represents the location for global configurations.
+pub struct Configurations<'context> {
+    parent: Datas<'context>,
+    name: &'static str,
+}
+
+impl<'context> Configurations<'context> {
+    pub(super) fn new(parent: Datas<'context>, name: &'static str) -> Self {
+        Self { parent, name }
+    }
+
+    pub fn for_module<'name>(self, name: Cow<'name, str>) -> ModuleConfigurations<'context, 'name> {
+        ModuleConfigurations::new(self, name)
+    }
+
+    pub fn path(&self) -> PathBuf {
+        let mut path = self.parent.path();
+        path.push(self.name);
+        path
+    }
+}
+
+/// Represents the location to store module configurations.
+pub struct ModuleConfigurations<'context, 'name> {
+    parent: Configurations<'context>,
+    name: Cow<'name, str>,
+}
+
+impl<'context, 'name> ModuleConfigurations<'context, 'name> {
+    fn new(parent: Configurations<'context>, name: Cow<'name, str>) -> Self {
+        Self { parent, name }
+    }
+
+    pub fn path(&self) -> PathBuf {
+        let mut path = self.parent.path();
+        path.push(self.name.as_ref());
+        path
+    }
+}

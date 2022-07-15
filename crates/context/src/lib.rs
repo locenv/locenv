@@ -114,6 +114,9 @@ pub struct Datas<'context> {
 
     #[directory(pub)]
     module: PhantomData<self::data::Modules<'context>>,
+
+    #[directory(pub)]
+    config: PhantomData<self::data::Configurations<'context>>,
 }
 
 impl<'context> Datas<'context> {
@@ -121,6 +124,7 @@ impl<'context> Datas<'context> {
         Self {
             path,
             module: PhantomData,
+            config: PhantomData,
         }
     }
 
