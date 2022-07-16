@@ -8,7 +8,7 @@ on:
     - main
 jobs:
   build-linux:
-    name: Build (Linux)
+    name: Build for Linux
     runs-on: ubuntu-20.04
     steps:
     - name: Checkout source
@@ -16,39 +16,33 @@ jobs:
       with:
         submodules: recursive
     - name: Build
-      run: cargo build
+      run: cargo build --release
     - name: Run tests
       run: cargo test
-    - name: Create artifact
-      run: cargo install --path crates/cli --root release
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
         name: amd64-linux
-        path: release
-  build-mac:
-    name: Build (macOS)
+        path: target/release/locenv
+  build-mac-amd64:
+    name: Build for macOS (AMD64)
     runs-on: macos-11
     steps:
     - name: Checkout source
       uses: actions/checkout@v3
       with:
         submodules: recursive
-    - name: Add aarch64-apple-darwin target
-      run: rustup target add aarch64-apple-darwin
     - name: Build
-      run: cargo build
+      run: cargo build --release
     - name: Run tests
       run: cargo test
-    - name: Create Intel artifact
-      run: cargo install --path crates/cli --root release-amd64 --target x86_64-apple-darwin
-    - name: Upload Intel artifact
+    - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
         name: amd64-mac
-        path: release-amd64
+        path: target/release/locenv
   build-windows:
-    name: Build (Windows)
+    name: Build for Windows
     runs-on: windows-2022
     steps:
     - name: Checkout source
@@ -56,13 +50,11 @@ jobs:
       with:
         submodules: recursive
     - name: Build
-      run: cargo build
+      run: cargo build --release
     - name: Run tests
       run: cargo test
-    - name: Create artifact
-      run: cargo install --path crates\cli --root release
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
         name: amd64-windows
-        path: release
+        path: target\release\locenv.exe
