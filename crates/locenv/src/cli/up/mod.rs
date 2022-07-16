@@ -1,12 +1,14 @@
-use crate::{Command, ServiceManagerState, SUCCESS};
+use super::{Command, ServiceManagerState};
+use crate::SUCCESS;
 use context::Context;
-use service::{ApplicationConfiguration, ServiceDefinition};
+use service::{ApplicationConfiguration, PlatformConfigurations, ServiceDefinition};
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::time::SystemTime;
 
-pub(crate) const COMMAND: Command = Command {
-    name: "pull",
-    specs: |name| clap::Command::new(name).about("Update all services"),
+pub(super) const COMMAND: Command = Command {
+    name: "up",
+    specs: |name| clap::Command::new(name).about("Start all services"),
     run,
     service_manager_state: Some(ServiceManagerState::Stopped),
 };
@@ -14,13 +16,14 @@ pub(crate) const COMMAND: Command = Command {
 pub const OPEN_CONFIGURATION_FAILED: u8 = 1;
 pub const READ_CONFIGURATION_FAILED: u8 = 2;
 pub const INVALID_REPOSITORY_OPTION: u8 = 3;
-pub const GIT_OPEN_FAILED: u8 = 4;
-pub const GIT_PULL_FAILED: u8 = 5;
-pub const GIT_CLONE_FAILED: u8 = 6;
+pub const GIT_CLONE_FAILED: u8 = 4;
+pub const GIT_OPEN_FAILED: u8 = 5;
+pub const GIT_PULL_FAILED: u8 = 6;
 pub const OPEN_DEFINITION_FAILED: u8 = 50;
 pub const READ_DEFINITION_FAILED: u8 = 51;
 pub const PLATFORM_NOT_SUPPORTED: u8 = 52;
-pub const BUILD_FAILED: u8 = 53;
+pub const DUPLICATED_CONFIGURATION: u8 = 53;
+pub const BUILD_FAILED: u8 = 54;
 
 fn run(context: &Context, _: &clap::ArgMatches) -> u8 {
     // Load config.
@@ -41,18 +44,37 @@ fn run(context: &Context, _: &clap::ArgMatches) -> u8 {
         }
     };
 
-    // Update and rebuild repositories.
+    // Download and build repositories.
+    let mut services: HashMap<&str, PlatformConfigurations> = HashMap::new();
+
     for (name, config) in &config.configurations {
         let repo = context
             .runtime()
             .configurations()
-            .by_name(Cow::Borrowed(&name));
+            .by_name(Cow::Borrowed(name.as_str()));
         let path = repo.path();
         let service_definition = repo.service_definition();
         let state = repo.build_state();
 
-        // Update.
-        if path.exists() {
+        // Download.
+        let build: bool = if !path.exists() {
+            println!("Downloading {} to {}...", name, path.display());
+
+            if let Err(e) = service::repository::download(&config.repository, &path) {
+                return match e {
+                    service::repository::DownloadError::InvalidOption(name) => {
+                        eprintln!("Invalid value for repository option '{}'", name);
+                        INVALID_REPOSITORY_OPTION
+                    }
+                    service::repository::DownloadError::GitCloneFailed(e) => {
+                        eprintln!("Failed to clone the repository: {}", e);
+                        GIT_CLONE_FAILED
+                    }
+                };
+            }
+
+            true
+        } else if !state.built_time().path().exists() {
             println!("Updating {}...", name);
 
             if let Err(e) = service::repository::update(&config.repository, &path) {
@@ -82,25 +104,12 @@ fn run(context: &Context, _: &clap::ArgMatches) -> u8 {
                         GIT_PULL_FAILED
                     }
                 };
-            } else if state.built_time().path().exists() {
-                continue;
             }
-        } else {
-            println!("Downloading {} to {}...", name, path.display());
 
-            if let Err(e) = service::repository::download(&config.repository, &path) {
-                return match e {
-                    service::repository::DownloadError::InvalidOption(name) => {
-                        eprintln!("Invalid value for repository option '{}'", name);
-                        INVALID_REPOSITORY_OPTION
-                    }
-                    service::repository::DownloadError::GitCloneFailed(e) => {
-                        eprintln!("Failed to clone the repository: {}", e);
-                        GIT_CLONE_FAILED
-                    }
-                };
-            }
-        }
+            true
+        } else {
+            false
+        };
 
         // Read service definition.
         let service: ServiceDefinition = match yaml::load_file(&service_definition) {
@@ -131,23 +140,30 @@ fn run(context: &Context, _: &clap::ArgMatches) -> u8 {
         };
 
         // Build.
-        if let Some(script) = &service.build {
-            let mut engine = script::Engine::new(context, &path);
+        if build {
+            if let Some(script) = &service.build {
+                let mut engine = script::Engine::new(context, &path);
 
-            println!("Building {}", name);
+                println!("Building {}", name);
 
-            if let Err(e) = engine.run(&script) {
-                let msg = match e {
-                    script::RunError::LoadError(m) => m,
-                    script::RunError::ExecError(m) => m,
-                };
+                if let Err(e) = engine.run(&script) {
+                    let msg = match e {
+                        script::RunError::LoadError(m) => m,
+                        script::RunError::ExecError(m) => m,
+                    };
 
-                eprintln!("{}", msg);
-                return BUILD_FAILED;
+                    eprintln!("{}", msg);
+                    return BUILD_FAILED;
+                }
             }
+
+            state.built_time().write(&SystemTime::now()).unwrap();
         }
 
-        state.built_time().write(&SystemTime::now()).unwrap();
+        if services.insert(&name, service).is_some() {
+            eprintln!("Duplicated configuration '{}'", name);
+            return DUPLICATED_CONFIGURATION;
+        }
     }
 
     SUCCESS

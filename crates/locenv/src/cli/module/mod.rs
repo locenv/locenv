@@ -1,10 +1,11 @@
-use crate::{Command, ServiceManagerState, SUCCESS};
+use super::{Command, ServiceManagerState};
+use crate::SUCCESS;
 use clap::{value_parser, Arg};
 use context::Context;
 use module::{InstallError, Module, PackageId, UpdateError};
 use std::borrow::Cow;
 
-pub(crate) const COMMAND: Command = Command {
+pub(super) const COMMAND: Command = Command {
     name: "mod",
     specs,
     run,
