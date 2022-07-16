@@ -59,7 +59,13 @@ fn process_command_line(context: &Context, commands: &[&Command], args: &ArgMatc
         if let Some(args) = args.subcommand_matches(command.name) {
             // Check service manager state.
             if let Some(state) = &command.service_manager_state {
-                let running = context.runtime().service_manager().port().path().exists();
+                let running = context
+                    .project()
+                    .runtime()
+                    .service_manager()
+                    .port()
+                    .path()
+                    .exists();
 
                 match state {
                     ServiceManagerState::Stopped => {

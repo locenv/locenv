@@ -11,7 +11,6 @@ pub mod runtime;
 /// Represents a context to run locenv.
 pub struct Context {
     project: PathBuf,
-    runtime: PathBuf,
     data: PathBuf,
 }
 
@@ -32,21 +31,12 @@ impl Context {
         };
 
         // Construct context.
-        Ok(Self {
-            runtime: project.join(".locenv"),
-            project,
-            data,
-        })
+        Ok(Self { project, data })
     }
 
     /// Gets the current project.
     pub fn project(&self) -> Project {
         Project::new(&self.project)
-    }
-
-    /// Gets the runtime of the current project.
-    pub fn runtime(&self) -> Runtime {
-        Runtime::new(&self.runtime)
     }
 
     /// Get the global data for locenv.
@@ -60,7 +50,10 @@ impl Context {
 pub struct Project<'context> {
     path: &'context Path,
 
-    #[placeholder(name = "locenv-services.yml", pub)]
+    #[directory(pub, name = ".locenv")]
+    runtime: PhantomData<self::runtime::Runtime<'context>>,
+
+    #[placeholder(pub, name = "locenv-services.yml")]
     services: PhantomData<()>,
 }
 
@@ -68,37 +61,8 @@ impl<'context> Project<'context> {
     fn new(path: &'context Path) -> Self {
         Project {
             path,
+            runtime: PhantomData,
             services: PhantomData,
-        }
-    }
-
-    pub fn path(&self) -> PathBuf {
-        self.path.into()
-    }
-}
-
-/// Represents a runtime directory of the project.
-#[derive(Directory)]
-pub struct Runtime<'context> {
-    path: &'context Path,
-
-    #[directory(pub)]
-    configurations: PhantomData<self::runtime::Configurations<'context>>,
-
-    #[directory(pub)]
-    data: PhantomData<self::runtime::Datas<'context>>,
-
-    #[directory(pub, kebab)]
-    service_manager: PhantomData<self::runtime::ServiceManager<'context>>,
-}
-
-impl<'context> Runtime<'context> {
-    fn new(path: &'context Path) -> Self {
-        Runtime {
-            path,
-            configurations: PhantomData,
-            data: PhantomData,
-            service_manager: PhantomData,
         }
     }
 
@@ -120,7 +84,7 @@ pub struct Datas<'context> {
 }
 
 impl<'context> Datas<'context> {
-    pub fn new(path: &'context Path) -> Self {
+    fn new(path: &'context Path) -> Self {
         Self {
             path,
             module: PhantomData,

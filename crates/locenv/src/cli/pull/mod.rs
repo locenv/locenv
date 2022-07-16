@@ -45,6 +45,7 @@ fn run(context: &Context, _: &clap::ArgMatches) -> u8 {
     // Update and rebuild repositories.
     for (name, config) in &config.configurations {
         let repo = context
+            .project()
             .runtime()
             .configurations()
             .by_name(Cow::Borrowed(&name));

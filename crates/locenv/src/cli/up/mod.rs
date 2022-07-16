@@ -49,6 +49,7 @@ fn run(context: &Context, _: &clap::ArgMatches) -> u8 {
 
     for (name, config) in &config.configurations {
         let repo = context
+            .project()
             .runtime()
             .configurations()
             .by_name(Cow::Borrowed(name.as_str()));

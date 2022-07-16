@@ -1,8 +1,42 @@
-use super::Runtime;
+use crate::Project;
 use fmap_macros::Directory;
 use std::borrow::Cow;
 use std::marker::PhantomData;
 use std::path::PathBuf;
+
+/// Represents a runtime directory of the project.
+#[derive(Directory)]
+pub struct Runtime<'context> {
+    parent: Project<'context>,
+    name: &'static str,
+
+    #[directory(pub)]
+    configurations: PhantomData<Configurations<'context>>,
+
+    #[directory(pub)]
+    data: PhantomData<Datas<'context>>,
+
+    #[directory(pub, kebab)]
+    service_manager: PhantomData<ServiceManager<'context>>,
+}
+
+impl<'context> Runtime<'context> {
+    pub(super) fn new(parent: Project<'context>, name: &'static str) -> Self {
+        Self {
+            parent,
+            name,
+            configurations: PhantomData,
+            data: PhantomData,
+            service_manager: PhantomData,
+        }
+    }
+
+    pub fn path(&self) -> PathBuf {
+        let mut path = self.parent.path();
+        path.push(self.name);
+        path
+    }
+}
 
 /// Represents where to store service configurations.
 pub struct Configurations<'context> {
@@ -11,7 +45,7 @@ pub struct Configurations<'context> {
 }
 
 impl<'context> Configurations<'context> {
-    pub(super) fn new(parent: Runtime<'context>, name: &'static str) -> Self {
+    fn new(parent: Runtime<'context>, name: &'static str) -> Self {
         Self { parent, name }
     }
 
@@ -89,7 +123,7 @@ pub struct Datas<'context> {
 }
 
 impl<'context> Datas<'context> {
-    pub(super) fn new(parent: Runtime<'context>, name: &'static str) -> Self {
+    fn new(parent: Runtime<'context>, name: &'static str) -> Self {
         Self { parent, name }
     }
 
@@ -133,7 +167,7 @@ pub struct ServiceManager<'context> {
 }
 
 impl<'context> ServiceManager<'context> {
-    pub(super) fn new(parent: Runtime<'context>, name: &'static str) -> Self {
+    fn new(parent: Runtime<'context>, name: &'static str) -> Self {
         Self {
             parent,
             name,
