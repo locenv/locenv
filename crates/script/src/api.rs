@@ -263,6 +263,7 @@ pub struct BootstrapContext {
     pub name: *const c_char,
     pub locenv: *const c_void,
     pub lua: *mut lua_State,
+    pub working_directory: *const c_char,
 }
 
 unsafe extern "C" fn module_configurations_path(

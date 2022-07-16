@@ -141,7 +141,7 @@ fn run(context: &Context, _: &clap::ArgMatches) -> u8 {
         // Build.
         if build {
             if let Some(script) = &service.build {
-                let mut engine = script::Engine::new(context);
+                let mut engine = script::Engine::new(context, &path);
 
                 println!("Building {}", name);
 

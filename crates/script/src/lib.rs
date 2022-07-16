@@ -12,9 +12,8 @@ use module::Module;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ffi::{c_void, CStr, CString};
-use std::marker::PhantomData;
 use std::mem::transmute;
-use std::os::raw::c_int;
+use std::os::raw::{c_char, c_int};
 use std::path::Path;
 use std::ptr::{null, null_mut};
 
@@ -28,25 +27,27 @@ macro_rules! cfmt {
 
 /// Represents an isolated environment to execute Lua script.
 pub struct Engine<'context> {
-    lua: *mut lua_State,
+    lua: *mut lua_State, // This one need to drop first so all of __gc method in the module still work correctly.
     loaded_modules: Box<ModuleTable<'context>>,
-    phantom: PhantomData<&'context mut lua_State>,
+    working_directory: Vec<u8>,
 }
 
 impl<'context> Engine<'context> {
-    pub fn new(context: &'context Context) -> Self {
-        // Allocate state.
-        let lua = unsafe { luaL_newstate() };
+    pub fn new<W: AsRef<Path>>(context: &'context Context, working_directory: W) -> Self {
+        // Allocate engine.
+        let working_directory = CString::new(working_directory.as_ref().to_str().unwrap()).unwrap();
+        let mut engine = Engine {
+            lua: null_mut(),
+            loaded_modules: Box::new(ModuleTable::new()),
+            working_directory: Vec::from(working_directory.as_bytes_with_nul()),
+        };
 
-        if lua.is_null() {
+        // Allocate Lua.
+        engine.lua = unsafe { luaL_newstate() };
+
+        if engine.lua.is_null() {
             panic!("Failed to create Lua engine due to insufficient memory");
         }
-
-        let mut engine = Engine {
-            lua,
-            loaded_modules: Box::new(ModuleTable::new()),
-            phantom: PhantomData,
-        };
 
         // Setup base library.
         engine.open_library(LUA_GNAME, luaopen_base);
@@ -64,7 +65,8 @@ impl<'context> Engine<'context> {
 
         engine.push_light_userdata(unsafe { transmute(context) });
         engine.push_light_userdata(unsafe { transmute(&*engine.loaded_modules) });
-        engine.push_fn(Self::module_searcher, 2);
+        engine.push_light_userdata(unsafe { transmute(engine.working_directory.as_ptr()) });
+        engine.push_fn(Self::module_searcher, 3);
 
         engine.set_index(-2, 2);
         engine.pop_stack(2); // Pop searchers and module.
@@ -118,6 +120,7 @@ impl<'context> Engine<'context> {
     unsafe extern "C" fn module_searcher(lua: *mut lua::lua_State) -> c_int {
         let context: &Context = transmute(lua_touserdata(lua, LUA_REGISTRYINDEX - 1));
         let loaded: &mut ModuleTable = transmute(lua_touserdata(lua, LUA_REGISTRYINDEX - 2));
+        let wd: *const c_char = transmute(lua_touserdata(lua, LUA_REGISTRYINDEX - 3));
         let name = luaL_checklstring(lua, 1, null_mut());
         let name = CStr::from_ptr(name).to_str().unwrap();
 
@@ -170,6 +173,7 @@ impl<'context> Engine<'context> {
                             name: name.as_ptr(),
                             locenv: transmute(context),
                             lua,
+                            working_directory: wd,
                         };
 
                         let result = Self::bootstrap_native_module(&context, &file);
@@ -302,7 +306,9 @@ impl<'context> Engine<'context> {
 
 impl<'context> Drop for Engine<'context> {
     fn drop(&mut self) {
-        unsafe { lua_close(self.lua) };
+        if !self.lua.is_null() {
+            unsafe { lua_close(self.lua) };
+        }
     }
 }
 
