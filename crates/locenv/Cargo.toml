@@ -4,9 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+ciborium = "0.2"
 clap = { version = "3.2", features = ["cargo"] }
 context = { path = "../context" }
+libc = "0.2"
 module = { path = "../module" }
 script = { path = "../script" }
 service = { path = "../service" }
 yaml = { path = "../yaml" }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.38", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console"] }

@@ -164,6 +164,9 @@ pub struct ServiceManager<'context> {
 
     #[file(pub)]
     port: PhantomData<fmap::TextFile<u16>>,
+
+    #[placeholder(pub, ext = "txt")]
+    log: PhantomData<()>,
 }
 
 impl<'context> ServiceManager<'context> {
@@ -172,6 +175,7 @@ impl<'context> ServiceManager<'context> {
             parent,
             name,
             port: PhantomData,
+            log: PhantomData,
         }
     }
 

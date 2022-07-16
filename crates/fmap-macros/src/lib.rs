@@ -177,12 +177,14 @@ fn parse_directory_field(meta: &Meta) -> Option<DirectoryField> {
                     public: false,
                     name: None,
                     kebab: false,
+                    extension: None,
                 })
             } else if p.is_ident("directory") {
                 DirectoryField::Directory(Directory {
                     public: false,
                     name: None,
                     kebab: false,
+                    extension: None,
                     borrow_parent: false,
                 })
             } else if p.is_ident("placeholder") {
@@ -190,6 +192,7 @@ fn parse_directory_field(meta: &Meta) -> Option<DirectoryField> {
                     public: false,
                     name: None,
                     kebab: false,
+                    extension: None,
                 })
             } else {
                 return None;
@@ -222,6 +225,7 @@ struct File {
     public: bool,
     name: Option<String>,
     kebab: bool,
+    extension: Option<String>,
 }
 
 impl File {
@@ -229,6 +233,7 @@ impl File {
         let mut public = false;
         let mut name: Option<String> = None;
         let mut kebab = false;
+        let mut extension: Option<String> = None;
 
         for item in &meta.nested {
             if let Some(v) = parse_common_directory_field(item) {
@@ -236,6 +241,7 @@ impl File {
                     DirectoryFieldAttribute::Public => public = true,
                     DirectoryFieldAttribute::Name(v) => name = Some(v),
                     DirectoryFieldAttribute::Kebab => kebab = true,
+                    DirectoryFieldAttribute::Extension(v) => extension = Some(v),
                 }
             }
         }
@@ -244,6 +250,7 @@ impl File {
             name,
             public,
             kebab,
+            extension,
         }
     }
 }
@@ -256,12 +263,17 @@ impl Field for File {
     fn kebab(&self) -> bool {
         self.kebab
     }
+
+    fn extension(&self) -> Option<&str> {
+        self.extension.as_deref()
+    }
 }
 
 struct Directory {
     public: bool,
     name: Option<String>,
     kebab: bool,
+    extension: Option<String>,
     borrow_parent: bool,
 }
 
@@ -270,6 +282,7 @@ impl Directory {
         let mut public = false;
         let mut name: Option<String> = None;
         let mut kebab = false;
+        let mut extension: Option<String> = None;
         let mut borrow_parent = false;
 
         for item in &meta.nested {
@@ -278,6 +291,7 @@ impl Directory {
                     DirectoryFieldAttribute::Public => public = true,
                     DirectoryFieldAttribute::Name(v) => name = Some(v),
                     DirectoryFieldAttribute::Kebab => kebab = true,
+                    DirectoryFieldAttribute::Extension(v) => extension = Some(v),
                 }
             } else if let NestedMeta::Meta(item) = item {
                 if let Meta::Path(path) = item {
@@ -292,6 +306,7 @@ impl Directory {
             public,
             name,
             kebab,
+            extension,
             borrow_parent,
         }
     }
@@ -305,12 +320,17 @@ impl Field for Directory {
     fn kebab(&self) -> bool {
         self.kebab
     }
+
+    fn extension(&self) -> Option<&str> {
+        self.extension.as_deref()
+    }
 }
 
 struct Placeholder {
     public: bool,
     name: Option<String>,
     kebab: bool,
+    extension: Option<String>,
 }
 
 impl Placeholder {
@@ -318,6 +338,7 @@ impl Placeholder {
         let mut public = false;
         let mut name: Option<String> = None;
         let mut kebab = false;
+        let mut extension: Option<String> = None;
 
         for item in &meta.nested {
             if let Some(v) = parse_common_directory_field(item) {
@@ -325,6 +346,7 @@ impl Placeholder {
                     DirectoryFieldAttribute::Public => public = true,
                     DirectoryFieldAttribute::Name(v) => name = Some(v),
                     DirectoryFieldAttribute::Kebab => kebab = true,
+                    DirectoryFieldAttribute::Extension(v) => extension = Some(v),
                 }
             }
         }
@@ -333,6 +355,7 @@ impl Placeholder {
             name,
             public,
             kebab,
+            extension,
         }
     }
 }
@@ -345,14 +368,19 @@ impl Field for Placeholder {
     fn kebab(&self) -> bool {
         self.kebab
     }
+
+    fn extension(&self) -> Option<&str> {
+        self.extension.as_deref()
+    }
 }
 
 trait Field {
     fn name(&self) -> Option<&str>;
     fn kebab(&self) -> bool;
+    fn extension(&self) -> Option<&str>;
 
     fn get_name(&self, ident: &Ident) -> String {
-        if let Some(name) = self.name() {
+        let mut result: String = if let Some(name) = self.name() {
             name.into()
         } else {
             let mut name = ident.to_string();
@@ -362,7 +390,14 @@ trait Field {
             }
 
             name
+        };
+
+        if let Some(v) = self.extension() {
+            result.push('.');
+            result.push_str(v);
         }
+
+        result
     }
 }
 
@@ -386,6 +421,10 @@ fn parse_common_directory_field(meta: &NestedMeta) -> Option<DirectoryFieldAttri
                 if let Lit::Str(v) = &p.lit {
                     return Some(DirectoryFieldAttribute::Name(v.value()));
                 }
+            } else if p.path.is_ident("ext") {
+                if let Lit::Str(v) = &p.lit {
+                    return Some(DirectoryFieldAttribute::Extension(v.value()));
+                }
             }
         }
         _ => {}
@@ -398,4 +437,5 @@ enum DirectoryFieldAttribute {
     Public,
     Name(String),
     Kebab,
+    Extension(String),
 }
