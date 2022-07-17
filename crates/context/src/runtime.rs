@@ -1,5 +1,6 @@
 use crate::Project;
-use fmap_macros::Directory;
+use dirtree::{TextFile, TimestampFile};
+use dirtree_macros::Directory;
 use std::borrow::Cow;
 use std::marker::PhantomData;
 use std::path::PathBuf;
@@ -97,7 +98,7 @@ pub struct BuildState<'context, 'name> {
     name: &'static str,
 
     #[file(pub, kebab)]
-    built_time: PhantomData<fmap::TimestampFile>,
+    built_time: PhantomData<TimestampFile>,
 }
 
 impl<'context, 'name> BuildState<'context, 'name> {
@@ -163,7 +164,7 @@ pub struct ServiceManager<'context> {
     name: &'static str,
 
     #[file(pub)]
-    port: PhantomData<fmap::TextFile<u16>>,
+    port: PhantomData<TextFile<u16>>,
 
     #[placeholder(pub, ext = "txt")]
     log: PhantomData<()>,

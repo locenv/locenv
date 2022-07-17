@@ -1,4 +1,4 @@
-use fmap_macros::Directory;
+use dirtree_macros::Directory;
 use std::env::VarError;
 use std::error::Error;
 use std::fmt::{Display, Formatter};

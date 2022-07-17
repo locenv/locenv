@@ -1,6 +1,7 @@
 use crate::package::PackageId;
 use context::data::ModuleMetadata;
-use fmap_macros::Directory;
+use dirtree::TextFile;
+use dirtree_macros::Directory;
 use std::marker::PhantomData;
 use std::path::PathBuf;
 
@@ -9,7 +10,7 @@ pub struct MetadataManager<'context, 'module> {
     context: ModuleMetadata<'context, 'module>,
 
     #[file(pub)]
-    registry: PhantomData<fmap::TextFile<PackageId>>,
+    registry: PhantomData<TextFile<PackageId>>,
 }
 
 impl<'context, 'module> MetadataManager<'context, 'module> {

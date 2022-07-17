@@ -1,5 +1,5 @@
 use super::Datas;
-use fmap_macros::Directory;
+use dirtree_macros::Directory;
 use std::borrow::Cow;
 use std::marker::PhantomData;
 use std::path::PathBuf;

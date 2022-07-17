@@ -1,8 +1,8 @@
 [workspace]
 members = [
     "crates/context",
-    "crates/fmap",
-    "crates/fmap-macros",
+    "crates/dirtree",
+    "crates/dirtree-macros",
     "crates/http",
     "crates/locenv",
     "crates/lua",
