@@ -151,9 +151,9 @@ pub struct ServiceDefinition {
 }
 
 impl ServiceDefinition {
-    pub fn flatten(&self) -> Option<PlatformConfigurations> {
+    pub fn flatten(&self) -> Option<(PlatformConfigurations, Platform)> {
         if let Some(v) = self.current() {
-            Some(v.clone())
+            Some((v.clone(), Platform::current()))
         } else {
             None
         }
@@ -179,4 +179,38 @@ impl ServiceDefinition {
 #[derive(Clone, Deserialize)]
 pub struct PlatformConfigurations {
     pub build: Option<String>,
+}
+
+/// Represents a unique identifier for the platform.
+pub enum Platform {
+    Linux,
+    Darwin,
+    Win32,
+}
+
+impl Platform {
+    #[cfg(target_os = "linux")]
+    pub fn current() -> Self {
+        Self::Linux
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn current() -> Self {
+        Self::Darwin
+    }
+
+    #[cfg(target_os = "windows")]
+    pub fn current() -> Self {
+        Self::Win32
+    }
+}
+
+impl AsRef<str> for Platform {
+    fn as_ref(&self) -> &str {
+        match self {
+            Platform::Linux => "linux",
+            Platform::Darwin => "darwin",
+            Platform::Win32 => "win32",
+        }
+    }
 }

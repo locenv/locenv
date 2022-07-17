@@ -98,7 +98,11 @@ impl<'context> Engine<'context> {
         engine
     }
 
-    pub fn run(&mut self, script: &str) -> Result<(), RunError> {
+    pub fn run<A: ToLua>(
+        &mut self,
+        script: &str,
+        argument: Option<&A>,
+    ) -> Result<(), RunError<A::Err>> {
         // Load script.
         let script = CString::new(script).unwrap();
         let status = unsafe { luaL_loadstring(self.lua, script.as_ptr()) };
@@ -107,8 +111,18 @@ impl<'context> Engine<'context> {
             return Err(RunError::LoadError(self.pop_string().unwrap()));
         }
 
+        // Push arguments.
+        let args: c_int = if let Some(a) = argument {
+            match a.to_lua(self.lua) {
+                Ok(r) => r,
+                Err(e) => return Err(RunError::ArgumentError(e)),
+            }
+        } else {
+            0
+        };
+
         // Run script.
-        let status = unsafe { lua_pcallk(self.lua, 0, 0, 0, 0, None) };
+        let status = unsafe { lua_pcallk(self.lua, args, 0, 0, 0, None) };
 
         if status != 0 {
             return Err(RunError::ExecError(self.pop_string().unwrap()));
@@ -313,9 +327,30 @@ impl<'context> Drop for Engine<'context> {
 }
 
 /// Represents the error from execution of a Lua script.
-pub enum RunError {
+pub enum RunError<A> {
     LoadError(String),
+    ArgumentError(A),
     ExecError(String),
+}
+
+/// A trait to convert Rust value(s) to Lua value(s).
+pub trait ToLua {
+    type Err;
+
+    fn to_lua(&self, lua: *mut lua_State) -> Result<c_int, Self::Err>;
+}
+
+impl<T> ToLua for T
+where
+    T: AsRef<str>,
+{
+    type Err = std::ffi::NulError;
+
+    fn to_lua(&self, lua: *mut lua_State) -> Result<c_int, Self::Err> {
+        let v = CString::new(self.as_ref())?;
+        unsafe { lua_pushstring(lua, v.as_ptr()) };
+        Ok(1)
+    }
 }
 
 type ModuleTable<'context> = HashMap<Module<'context, 'static>, Option<Library>>;

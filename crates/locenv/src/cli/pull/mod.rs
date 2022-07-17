@@ -121,7 +121,7 @@ fn run(context: &Context, _: &clap::ArgMatches) -> u8 {
             }
         };
 
-        let service = match service.flatten() {
+        let (config, platform) = match service.flatten() {
             Some(v) => v,
             None => {
                 eprintln!(
@@ -133,14 +133,17 @@ fn run(context: &Context, _: &clap::ArgMatches) -> u8 {
         };
 
         // Build.
-        if let Some(script) = &service.build {
+        if let Some(script) = &config.build {
             let mut engine = script::Engine::new(context, &path);
 
-            println!("Building {}", name);
+            println!("Building {}...", name);
 
-            if let Err(e) = engine.run(&script) {
+            if let Err(e) = engine.run(&script, Some(&platform)) {
                 let msg = match e {
                     script::RunError::LoadError(m) => m,
+                    script::RunError::ArgumentError(e) => {
+                        panic!("Cannot convert script argument to Lua value: {}", e)
+                    }
                     script::RunError::ExecError(m) => m,
                 };
 
