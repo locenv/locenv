@@ -65,14 +65,18 @@ fn log_stderr(context: &Context) -> windows::Win32::Foundation::HANDLE {
 
     let path = context.project().runtime().service_manager().log();
     let file = unsafe {
-        let name = w!(path);
-        let access = GENERIC_WRITE;
+        let name = HSTRING::from(path.to_str().unwrap());
+        let access = FILE_ACCESS_FLAGS(GENERIC_WRITE);
         let share = FILE_SHARE_READ;
         let security = std::ptr::null();
         let creation = CREATE_ALWAYS;
         let attributes = FILE_ATTRIBUTE_NORMAL;
+        let template = HANDLE::default();
 
-        CreateFileW(name, access, share, security, creation, attributes, 0).unwrap()
+        CreateFileW(
+            &name, access, share, security, creation, attributes, template,
+        )
+        .unwrap()
     };
 
     unsafe {
