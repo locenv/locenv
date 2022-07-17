@@ -2,7 +2,6 @@
 [![CI](https://github.com/locenv/locenv/actions/workflows/ci.yml/badge.svg)](https://github.com/locenv/locenv/actions/workflows/ci.yml)
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/m/locenv/locenv)
 ![GitHub repo size](https://img.shields.io/github/repo-size/locenv/locenv)
-![Lines of code](https://img.shields.io/tokei/lines/github/locenv/locenv)
 
 This is a cross-platform tool to spinup services for development from a unified configuration file similar to Docker Compose but the services run directly on
 the host instead of container. Thus no virtual machine is required on macOS and Windows.
