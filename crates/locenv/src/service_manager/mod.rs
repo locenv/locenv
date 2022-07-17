@@ -35,12 +35,13 @@ pub fn run() -> u8 {
 fn log_stderr(context: &Context) -> std::os::raw::c_int {
     use libc::{open, O_CLOEXEC, O_CREAT, O_TRUNC, O_WRONLY, S_IRGRP, S_IROTH, S_IRUSR, S_IWUSR};
     use std::ffi::CString;
+    use std::os::raw::c_uint;
 
     let log = context.project().runtime().service_manager().log();
     let path = CString::new(log.to_str().unwrap()).unwrap();
     let flags = O_CREAT | O_WRONLY | O_TRUNC | O_CLOEXEC;
     let mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
-    let fd = unsafe { open(path.as_ptr(), flags, mode) };
+    let fd = unsafe { open(path.as_ptr(), flags, mode as c_uint) };
 
     if fd < 0 {
         panic!("Failed to open {}", log.display());
@@ -57,6 +58,7 @@ fn log_stderr(context: &Context) -> std::os::raw::c_int {
 #[cfg(target_os = "windows")]
 fn log_stderr(context: &Context) -> windows::Win32::Foundation::HANDLE {
     use windows::core::*;
+    use windows::Win32::Foundation::*;
     use windows::Win32::Storage::FileSystem::*;
     use windows::Win32::System::Console::*;
     use windows::Win32::System::SystemServices::*;
