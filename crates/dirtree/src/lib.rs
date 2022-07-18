@@ -156,3 +156,8 @@ where
         }
     }
 }
+
+#[derive(Debug)]
+pub enum DirectoryError {
+    CreateFailed(std::io::Error),
+}

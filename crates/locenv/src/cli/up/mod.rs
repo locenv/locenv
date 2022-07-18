@@ -50,12 +50,14 @@ fn run(context: &Context, _: &clap::ArgMatches) -> u8 {
     for (name, config) in &config.configurations {
         let repo = context
             .project()
-            .runtime()
-            .configurations()
+            .runtime(false)
+            .unwrap()
+            .configurations(false)
+            .unwrap()
             .by_name(Cow::Borrowed(name.as_str()));
         let path = repo.path();
         let service_definition = repo.service_definition();
-        let state = repo.build_state();
+        let state = repo.build_state(false).unwrap();
 
         // Download.
         let build: bool = if !path.exists() {

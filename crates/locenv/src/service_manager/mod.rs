@@ -1,6 +1,6 @@
 use crate::SUCCESS;
 use context::Context;
-use std::fs::create_dir_all;
+use std::ffi::CString;
 
 pub const INITIALIZATION_FAILED: u8 = 254;
 
@@ -14,13 +14,18 @@ pub fn run() -> u8 {
         }
     };
 
-    let path = context.project().runtime().service_manager().path();
+    let log = unsafe {
+        let path = context
+            .project()
+            .runtime(true)
+            .unwrap()
+            .service_manager(true)
+            .unwrap()
+            .log();
+        let path = CString::new(path.to_str().unwrap()).unwrap();
 
-    if !path.exists() {
-        create_dir_all(path).unwrap();
-    }
-
-    let log = log_stderr(&context);
+        log_stderr(path.as_ptr())
+    };
 
     // TODO:
     // - Open STDIN and read commands from CLI.
@@ -31,57 +36,10 @@ pub fn run() -> u8 {
     SUCCESS
 }
 
-#[cfg(not(target_os = "windows"))]
-fn log_stderr(context: &Context) -> std::os::raw::c_int {
-    use libc::{open, O_CLOEXEC, O_CREAT, O_TRUNC, O_WRONLY, S_IRGRP, S_IROTH, S_IRUSR, S_IWUSR};
-    use std::ffi::CString;
-    use std::os::raw::c_uint;
+extern "C" {
+    #[cfg(target_family = "unix")]
+    fn log_stderr(path: *const std::os::raw::c_char) -> std::os::raw::c_int;
 
-    let log = context.project().runtime().service_manager().log();
-    let path = CString::new(log.to_str().unwrap()).unwrap();
-    let flags = O_CREAT | O_WRONLY | O_TRUNC | O_CLOEXEC;
-    let mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
-    let fd = unsafe { open(path.as_ptr(), flags, mode as c_uint) };
-
-    if fd < 0 {
-        panic!("Failed to open {}", log.display());
-    }
-
-    if unsafe { libc::dup2(fd, libc::STDERR_FILENO) } < 0 {
-        panic!("Failed to overwrite STDERR")
-    }
-
-    fd
-}
-
-// https://stackoverflow.com/a/54096218/1829232
-#[cfg(target_os = "windows")]
-fn log_stderr(context: &Context) -> windows::Win32::Foundation::HANDLE {
-    use windows::core::*;
-    use windows::Win32::Foundation::*;
-    use windows::Win32::Storage::FileSystem::*;
-    use windows::Win32::System::Console::*;
-    use windows::Win32::System::SystemServices::*;
-
-    let path = context.project().runtime().service_manager().log();
-    let file = unsafe {
-        let name = HSTRING::from(path.to_str().unwrap());
-        let access = FILE_ACCESS_FLAGS(GENERIC_WRITE);
-        let share = FILE_SHARE_READ;
-        let security = std::ptr::null();
-        let creation = CREATE_ALWAYS;
-        let attributes = FILE_ATTRIBUTE_NORMAL;
-        let template = HANDLE::default();
-
-        CreateFileW(
-            &name, access, share, security, creation, attributes, template,
-        )
-        .unwrap()
-    };
-
-    unsafe {
-        SetStdHandle(STD_ERROR_HANDLE, file).unwrap();
-    };
-
-    file
+    #[cfg(target_family = "windows")]
+    fn log_stderr(path: *const std::os::raw::c_char) -> *const std::ffi::c_void;
 }

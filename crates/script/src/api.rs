@@ -276,7 +276,8 @@ unsafe extern "C" fn module_configurations_path(
     let name = CStr::from_ptr(name).to_str().unwrap();
     let config = context
         .data()
-        .config()
+        .config(false)
+        .unwrap()
         .for_module(Cow::Borrowed(name))
         .path();
     let path = config.to_str().unwrap();

@@ -37,7 +37,7 @@ pub enum FindError {
 
 impl<'context, 'name> Module<'context, 'name> {
     pub fn find(context: &'context Context, name: Cow<'name, str>) -> Result<Self, FindError> {
-        let context = context.data().module().by_name(name);
+        let context = context.data().module(false).unwrap().by_name(name);
         let path = context.path();
 
         // Check if module directory exists.
@@ -53,7 +53,7 @@ impl<'context, 'name> Module<'context, 'name> {
         Ok(Module {
             definition,
             path,
-            metadata: MetadataManager::new(context.metadata()),
+            metadata: MetadataManager::new(context.metadata(false).unwrap()),
         })
     }
 
@@ -76,7 +76,8 @@ impl<'context, 'name> Module<'context, 'name> {
         // Check if installation can be proceed.
         let context = context
             .data()
-            .module()
+            .module(false)
+            .unwrap()
             .by_name(Cow::Owned(definition.name.clone()));
         let path = context.path();
 
@@ -91,7 +92,7 @@ impl<'context, 'name> Module<'context, 'name> {
         Self::install_package(&content, &path);
 
         // Write metadata.
-        let metadata = MetadataManager::new(context.metadata());
+        let metadata = MetadataManager::new(context.metadata(false).unwrap());
 
         metadata.registry().write(&id).unwrap();
 
@@ -108,7 +109,7 @@ impl<'context, 'name> Module<'context, 'name> {
 
     pub fn update(context: &'context Context, name: Cow<'name, str>) -> Result<Self, UpdateError> {
         // Check if module installed.
-        let context = context.data().module().by_name(name);
+        let context = context.data().module(false).unwrap().by_name(name);
         let path = context.path();
 
         if !path.exists() {
@@ -118,7 +119,7 @@ impl<'context, 'name> Module<'context, 'name> {
         let local: ModuleDefinition = yaml::load_file(context.definition()).unwrap();
 
         // Get registry.
-        let metadata = MetadataManager::new(context.metadata());
+        let metadata = MetadataManager::new(context.metadata(false).unwrap());
         let id = metadata.registry().read().unwrap();
 
         // Download latest package.

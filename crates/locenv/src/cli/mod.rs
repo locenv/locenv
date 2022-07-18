@@ -61,8 +61,10 @@ fn process_command_line(context: &Context, commands: &[&Command], args: &ArgMatc
             if let Some(state) = &command.service_manager_state {
                 let running = context
                     .project()
-                    .runtime()
-                    .service_manager()
+                    .runtime(false)
+                    .unwrap()
+                    .service_manager(false)
+                    .unwrap()
                     .port()
                     .path()
                     .exists();
