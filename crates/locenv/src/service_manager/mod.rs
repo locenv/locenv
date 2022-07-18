@@ -1,8 +1,11 @@
+use self::client::{Client, ConsoleConnection};
 use crate::SUCCESS;
 use context::Context;
 use std::ffi::CString;
 
 pub const INITIALIZATION_FAILED: u8 = 254;
+
+mod client;
 
 pub fn run() -> u8 {
     // Initialize foundation.
@@ -27,9 +30,10 @@ pub fn run() -> u8 {
         log_stderr(path.as_ptr())
     };
 
+    // Create a connection with the parent.
+    let parent = Client::new(ConsoleConnection::new());
+
     // TODO:
-    // - Open STDIN and read commands from CLI.
-    // - Open STDOUT and write response to CLI.
     // - Send a response to tell that initialization is completed and port file has been written.
     // - Reopen STDOUT to log file.
 

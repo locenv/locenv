@@ -8,6 +8,7 @@
 
 extern "C" int log_stderr(const char *path)
 {
+    // Create a file.
     auto fd = open(path, O_CREAT | O_WRONLY | O_TRUNC | O_CLOEXEC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 
     if (fd < 0) {
@@ -19,6 +20,7 @@ extern "C" int log_stderr(const char *path)
         throw std::runtime_error(reason.str());
     }
 
+    // Duplicate it to STDERR.
     if (dup2(fd, STDERR_FILENO) < 0) {
         auto code = errno;
         std::stringstream reason;
@@ -28,5 +30,8 @@ extern "C" int log_stderr(const char *path)
         throw std::runtime_error(reason.str());
     }
 
-    return fd;
+    // Close the original FD.
+    close(fd);
+
+    return STDERR_FILENO;
 }
