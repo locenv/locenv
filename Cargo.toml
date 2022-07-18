@@ -3,7 +3,7 @@ members = [
     "crates/context",
     "crates/dirtree",
     "crates/dirtree-macros",
-    "crates/http",
+    "crates/kuro",
     "crates/locenv",
     "crates/lua",
     "crates/module",

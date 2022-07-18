@@ -1,9 +1,10 @@
 [package]
-name = "http"
+name = "kuro"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 curl = { version = "0.4", features = ["ssl", "static-curl"] }
+http = "0.2"
 serde = "1.0"
 serde_json = "1.0"

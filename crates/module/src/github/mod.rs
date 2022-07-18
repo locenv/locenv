@@ -1,4 +1,5 @@
-use http::json::JsonReader;
+use http::StatusCode;
+use kuro::json::JsonReader;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::Seek;
@@ -9,7 +10,7 @@ mod models;
 pub enum Error {
     InvalidIdentifier,
     ReadReleaseFailed(Box<dyn std::error::Error>),
-    GetReleaseFailed(http::status::Code),
+    GetReleaseFailed(StatusCode),
     DeserializeReleaseFailed(Box<dyn std::error::Error>),
     DownloadReleaseFailed(Box<dyn std::error::Error>),
 }
@@ -44,7 +45,7 @@ pub fn get_latest_package(id: &str) -> Result<File, Error> {
     let repo = buffer;
 
     // GitHub required User-Agent to be set otherwise we will get 403.
-    let mut options = http::Options {
+    let mut options = kuro::Options {
         user_agent: Some("locenv"),
         accept: None,
     };
@@ -56,12 +57,12 @@ pub fn get_latest_package(id: &str) -> Result<File, Error> {
         owner, repo
     );
 
-    let status = match http::get(&url, Some(&options), &mut handler) {
+    let status = match kuro::get(&url, Some(&options), &mut handler) {
         Ok(r) => r,
         Err(e) => return Err(Error::ReadReleaseFailed(e.into())),
     };
 
-    if status != http::status::OK {
+    if status != StatusCode::OK {
         return Err(Error::GetReleaseFailed(status));
     }
 
@@ -72,11 +73,11 @@ pub fn get_latest_package(id: &str) -> Result<File, Error> {
 
     // Download release asset.
     let mut asset = tempfile::tempfile().unwrap();
-    let mut handler = http::writer::Writer::new(&asset);
+    let mut handler = kuro::writer::Writer::new(&asset);
 
     options.accept = Some("application/octet-stream");
 
-    if let Err(e) = http::get(&release.assets[0].url, Some(&options), &mut handler) {
+    if let Err(e) = kuro::get(&release.assets[0].url, Some(&options), &mut handler) {
         return Err(Error::DownloadReleaseFailed(e.into()));
     }
 

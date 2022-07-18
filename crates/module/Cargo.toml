@@ -8,7 +8,8 @@ context = { path = "../context" }
 dirtree = { path = "../dirtree" }
 dirtree-macros = { path = "../dirtree-macros" }
 fs_extra = "1.2"
-http = { path = "../http" }
+http = "0.2"
+kuro = { path = "../kuro" }
 serde = "1.0"
 tempfile = "3.3"
 yaml = { path = "../yaml" }

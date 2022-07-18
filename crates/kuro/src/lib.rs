@@ -7,7 +7,6 @@ pub mod header;
 pub mod json;
 pub mod mime;
 pub mod status;
-pub mod version;
 pub mod writer;
 
 mod session;

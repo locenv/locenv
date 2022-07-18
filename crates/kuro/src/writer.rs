@@ -2,6 +2,7 @@ use crate::handler::Handler;
 use crate::header::Header;
 use crate::mime::MediaType;
 use crate::status;
+use http::StatusCode;
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::io::Write;
@@ -15,7 +16,7 @@ pub struct Writer<'allowed_type, O: Write> {
 
 #[derive(Debug)]
 pub enum ReadError {
-    UnhandledStatus(status::Code),
+    UnhandledStatus(StatusCode),
     MalformedContentType(String),
     UnexpectedContentType(Option<MediaType<'static>>),
     WriteFailed(std::io::Error),
@@ -46,9 +47,9 @@ impl<'allowed_type, O: Write> Handler for Writer<'allowed_type, O> {
     fn process_status(&mut self, line: &status::Line) -> Result<(), ReadError> {
         let code = line.code();
 
-        if code == status::CONTINUE || code.is_redirection() {
+        if code == StatusCode::CONTINUE || code.is_redirection() {
             Ok(())
-        } else if code.is_successful() {
+        } else if code.is_success() {
             self.final_response = true;
             Ok(())
         } else {

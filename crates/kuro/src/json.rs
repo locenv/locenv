@@ -2,16 +2,17 @@ use crate::handler::Handler;
 use crate::header::Header;
 use crate::mime::{MediaType, APPLICATION_JSON};
 use crate::status;
+use http::StatusCode;
 use std::fmt::{Display, Formatter};
 
 pub struct JsonReader {
-    status: Option<status::Code>,
+    status: Option<StatusCode>,
     body: Vec<u8>,
 }
 
 #[derive(Debug)]
 pub enum ReadError {
-    UnhandledStatus(status::Code),
+    UnhandledStatus(StatusCode),
     MalformedContentType(String),
     InvalidContentType(MediaType<'static>),
 }
@@ -47,23 +48,23 @@ impl JsonReader {
 }
 
 impl Handler for JsonReader {
-    type Output = status::Code;
+    type Output = StatusCode;
     type Err = ReadError;
 
     fn process_status(&mut self, line: &status::Line) -> Result<(), ReadError> {
         match line.code() {
-            status::CONTINUE | status::MOVED_PERMANENTLY | status::FOUND => Ok(()),
-            c @ (status::OK
-            | status::CREATED
-            | status::ACCEPTED
-            | status::NON_AUTHORITATIVE_INFORMATION
-            | status::NO_CONTENT
-            | status::RESET_CONTENT
-            | status::BAD_REQUEST
-            | status::CONFLICT
-            | status::GONE
-            | status::PAYLOAD_TOO_LARGE
-            | status::UNAVAILABLE_FOR_LEGAL_REASONS) => {
+            StatusCode::CONTINUE | StatusCode::MOVED_PERMANENTLY | StatusCode::FOUND => Ok(()),
+            c @ (StatusCode::OK
+            | StatusCode::CREATED
+            | StatusCode::ACCEPTED
+            | StatusCode::NON_AUTHORITATIVE_INFORMATION
+            | StatusCode::NO_CONTENT
+            | StatusCode::RESET_CONTENT
+            | StatusCode::BAD_REQUEST
+            | StatusCode::CONFLICT
+            | StatusCode::GONE
+            | StatusCode::PAYLOAD_TOO_LARGE
+            | StatusCode::UNAVAILABLE_FOR_LEGAL_REASONS) => {
                 self.status = Some(c);
                 Ok(())
             }
@@ -99,7 +100,7 @@ impl Handler for JsonReader {
 
     fn process_body(&mut self, chunk: &[u8]) -> Result<(), ReadError> {
         if let Some(c) = self.status {
-            if c != status::NO_CONTENT {
+            if c != StatusCode::NO_CONTENT {
                 self.body.extend_from_slice(chunk);
             }
         }
@@ -107,7 +108,7 @@ impl Handler for JsonReader {
         Ok(())
     }
 
-    fn take_output(&mut self) -> Result<status::Code, ReadError> {
+    fn take_output(&mut self) -> Result<StatusCode, ReadError> {
         Ok(self.status.unwrap())
     }
 }
