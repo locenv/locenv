@@ -1,5 +1,6 @@
 use clap::ArgMatches;
 use context::Context;
+use dirtree::File;
 use std::unreachable;
 
 mod module;

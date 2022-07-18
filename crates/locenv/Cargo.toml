@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 clap = { version = "3.2", features = ["cargo"] }
 context = { path = "../context" }
+dirtree = { path = "../dirtree" }
 module = { path = "../module" }
 script = { path = "../script" }
 service = { path = "../service" }

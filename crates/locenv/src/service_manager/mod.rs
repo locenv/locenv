@@ -1,7 +1,8 @@
-use self::client::{Client, ConsoleConnection};
 use crate::SUCCESS;
 use context::Context;
+use dirtree::TempFile;
 use std::ffi::CString;
+use std::net::{SocketAddr, TcpListener};
 
 pub const INITIALIZATION_FAILED: u8 = 254;
 
@@ -17,33 +18,47 @@ pub fn run() -> u8 {
         }
     };
 
-    let log = unsafe {
-        let path = context
+    let server = TcpListener::bind("127.0.0.1:0").unwrap();
+
+    // Write port file.
+    let port = context
+        .project()
+        .runtime(true)
+        .unwrap()
+        .service_manager(true)
+        .unwrap()
+        .port();
+    let port = TempFile::new(port);
+
+    port.write(&match server.local_addr().unwrap() {
+        SocketAddr::V4(a) => a.port(),
+        SocketAddr::V6(a) => a.port(),
+    })
+    .unwrap();
+
+    // TODO: Report status to the parent.
+
+    // Redirect STDOUT and STDERR to log file.
+    unsafe {
+        let file = context
             .project()
-            .runtime(true)
+            .runtime(false)
             .unwrap()
-            .service_manager(true)
+            .service_manager(false)
             .unwrap()
             .log();
-        let path = CString::new(path.to_str().unwrap()).unwrap();
+        let file = CString::new(file.to_str().unwrap()).unwrap();
 
-        log_stderr(path.as_ptr())
-    };
-
-    // Create a connection with the parent.
-    let parent = Client::new(ConsoleConnection::new());
-
-    // TODO:
-    // - Send a response to tell that initialization is completed and port file has been written.
-    // - Reopen STDOUT to log file.
+        redirect_console_output(file.as_ptr());
+    }
 
     SUCCESS
 }
 
 extern "C" {
     #[cfg(target_family = "unix")]
-    fn log_stderr(path: *const std::os::raw::c_char) -> std::os::raw::c_int;
+    fn redirect_console_output(file: *const std::os::raw::c_char);
 
     #[cfg(target_family = "windows")]
-    fn log_stderr(path: *const std::os::raw::c_char) -> *const std::ffi::c_void;
+    fn redirect_console_output(file: *const std::os::raw::c_char);
 }

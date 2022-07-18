@@ -1,6 +1,7 @@
 use super::{Command, ServiceManagerState};
 use crate::SUCCESS;
 use context::Context;
+use dirtree::File;
 use service::{ApplicationConfiguration, ServiceDefinition};
 use std::borrow::Cow;
 use std::time::SystemTime;

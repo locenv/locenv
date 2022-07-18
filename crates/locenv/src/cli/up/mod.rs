@@ -1,6 +1,7 @@
 use super::{Command, ServiceManagerState};
 use crate::SUCCESS;
 use context::Context;
+use dirtree::File;
 use service::{ApplicationConfiguration, PlatformConfigurations, ServiceDefinition};
 use std::borrow::Cow;
 use std::collections::HashMap;

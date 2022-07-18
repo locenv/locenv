@@ -572,6 +572,7 @@ dependencies = [
  "cc",
  "clap",
  "context",
+ "dirtree",
  "module",
  "script",
  "service",

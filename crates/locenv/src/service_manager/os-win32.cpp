@@ -35,30 +35,38 @@ static std::unique_ptr<wchar_t[]> from_utf8(const char *utf8)
     return buffer;
 }
 
-extern "C" void * log_stderr(const char *path)
+extern "C" void redirect_console_output(const char *file)
 {
     // Create file.
-    auto name = from_utf8(path);
-    auto file = CreateFileW(name.get(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    auto name = from_utf8(file);
+    auto handle = CreateFileW(name.get(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
 
-    if (file == INVALID_HANDLE_VALUE) {
-        auto code = GetLastError();
-        std::stringstream message;
+    if (handle == INVALID_HANDLE_VALUE) {
+        auto c = GetLastError();
+        std::stringstream m;
 
-        message << "Cannot create " << path << " (" << code << ")";
+        m << "Cannot create " << file << " (" << c << ")";
 
-        throw std::runtime_error(message.str());
+        throw std::runtime_error(m.str());
+    }
+
+    // Set STDOUT.
+    if (!SetStdHandle(STD_OUTPUT_HANDLE, handle)) {
+        auto c = GetLastError();
+        std::stringstream m;
+
+        m << "Cannot use " << file << " as a standard output device (" << c << ")";
+
+        throw std::runtime_error(m.str());
     }
 
     // Set STDERR.
-    if (!SetStdHandle(STD_ERROR_HANDLE, file)) {
-        auto code = GetLastError();
-        std::stringstream message;
+    if (!SetStdHandle(STD_ERROR_HANDLE, handle)) {
+        auto c = GetLastError();
+        std::stringstream m;
 
-        message << "Cannot use " << path << " as a standard error device (" << code << ")";
+        m << "Cannot use " << file << " as a standard error device (" << c << ")";
 
-        throw std::runtime_error(message.str());
+        throw std::runtime_error(m.str());
     }
-
-    return file;
 }

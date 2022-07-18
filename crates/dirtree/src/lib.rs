@@ -1,7 +1,8 @@
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
-use std::fs::create_dir_all;
+use std::fs::{create_dir_all, remove_file};
 use std::marker::PhantomData;
+use std::ops::Deref;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -12,6 +13,38 @@ pub fn ensure_path<'path>(path: &'path PathBuf) -> std::io::Result<&'path PathBu
     }
 
     Ok(path)
+}
+
+pub trait File {
+    fn path(&self) -> PathBuf;
+}
+
+pub struct TempFile<T: File>(T);
+
+impl<T: File> TempFile<T> {
+    pub fn new(inner: T) -> Self {
+        Self(inner)
+    }
+}
+
+impl<T: File> Deref for TempFile<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T: File> Drop for TempFile<T> {
+    fn drop(&mut self) {
+        let path = self.0.path();
+
+        if let Err(e) = remove_file(&path) {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                panic!("Failed to remove {}: {}", path.display(), e);
+            }
+        }
+    }
 }
 
 /// Represents a file to store [`SystemTime`].
@@ -49,8 +82,10 @@ impl TimestampFile {
 
         Ok(UNIX_EPOCH + Duration::from_secs(unix))
     }
+}
 
-    pub fn path(&self) -> PathBuf {
+impl File for TimestampFile {
+    fn path(&self) -> PathBuf {
         self.parent.join(self.name)
     }
 }
@@ -121,8 +156,14 @@ where
             .parse()
             .map_err(|e| TextFileError::ParseFailed(e))
     }
+}
 
-    pub fn path(&self) -> PathBuf {
+impl<D> File for TextFile<D>
+where
+    D: ToString + FromStr + Debug,
+    <D as FromStr>::Err: Display + Debug,
+{
+    fn path(&self) -> PathBuf {
         self.parent.join(self.name)
     }
 }
