@@ -21,7 +21,7 @@ static std::unique_ptr<wchar_t[]> from_utf8(const char *utf8)
     }
 
     // Decode.
-    auto buffer = std::make_unique<wchar_t>(required);
+    auto buffer = std::make_unique<wchar_t[]>(required);
 
     if (!MultiByteToWideChar(CP_UTF8, 0, utf8, bytes, buffer.get(), required)) {
         auto code = GetLastError();
