@@ -7,8 +7,12 @@ edition = "2021"
 clap = { version = "3.2", features = ["cargo"] }
 context = { path = "../context" }
 dirtree = { path = "../dirtree" }
+http = "0.2"
 module = { path = "../module" }
+reqmap-macros = { path = "../reqmap-macros" }
 script = { path = "../script" }
+serde = "1.0"
+serde_json = "1.0"
 service = { path = "../service" }
 yaml = { path = "../yaml" }
 
