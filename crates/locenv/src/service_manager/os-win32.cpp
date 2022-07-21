@@ -7,8 +7,10 @@
 #include <stdexcept>
 
 #include <string.h>
-#include <windows.h>
 #include <winsock2.h>
+
+// windows.h required to included after the other headers otherwise it will cause redefinition error.
+#include <windows.h>
 
 #define WM_RPC_SERVER (WM_USER + 0)
 
