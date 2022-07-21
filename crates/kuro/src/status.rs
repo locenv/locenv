@@ -24,7 +24,7 @@ impl FromStr for Line {
         let mut version: Option<Version> = None;
         let mut code: Option<StatusCode> = None;
 
-        for p in s.splitn(2, ' ') {
+        for p in s.splitn(3, ' ') {
             if version.is_none() {
                 version = Some(match p {
                     "HTTP/1.1" => Version::HTTP_11,
