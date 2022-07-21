@@ -1,10 +1,20 @@
+#include <iostream>
+#include <ostream>
 #include <sstream>
 #include <stdexcept>
 
 #include <errno.h>
 #include <fcntl.h>
+#include <inttypes.h>
+#include <signal.h>
 #include <string.h>
+#include <sys/select.h>
 #include <unistd.h>
+
+extern "C" {
+    extern const uint8_t BLOCK_SIGNALS_FAILED;
+    extern const uint8_t SELECT_FAILED;
+}
 
 extern "C" void redirect_console_output(const char *file)
 {
@@ -42,4 +52,35 @@ extern "C" void redirect_console_output(const char *file)
 
     // Close the original FD.
     close(fd);
+}
+
+extern "C" uint8_t event_loop(int server)
+{
+    // Block all signals.
+    sigset_t mask;
+
+    sigfillset(&mask);
+
+    if (sigprocmask(SIG_SETMASK, &mask, nullptr) < 0) {
+        auto c = errno;
+        std::cout << "Failed to block signals: " << strerror(c) << std::endl;
+        return BLOCK_SIGNALS_FAILED;
+    }
+
+    // Enter event loop.
+    sigdelset(&mask, SIGTERM);
+
+    for (;;) {
+        // Wait for events.
+        if (pselect(1, nullptr, nullptr, nullptr, nullptr, &mask) < 0) {
+            auto c = errno;
+
+            if (c == EINTR) {
+                continue;
+            }
+
+            std::cout << "Failed to wait for events: " << strerror(c) << std::endl;
+            return SELECT_FAILED;
+        }
+    }
 }

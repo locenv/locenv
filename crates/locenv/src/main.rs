@@ -3,7 +3,8 @@ use std::env::VarError;
 mod cli;
 mod service_manager;
 
-pub const SUCCESS: u8 = 0;
+#[no_mangle]
+pub static SUCCESS: u8 = 0;
 pub const INVALID_LOCENV_PROCESS_MODE: u8 = 255;
 
 fn main() {

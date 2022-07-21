@@ -1,10 +1,23 @@
 use self::responses::ServiceManagerStatus;
-use crate::SUCCESS;
 use context::Context;
 use dirtree::TempFile;
 use std::ffi::CString;
 use std::net::{SocketAddr, TcpListener};
+#[cfg(target_family = "unix")]
+use std::os::unix::prelude::AsRawFd;
+#[cfg(target_family = "windows")]
+use std::os::windows::io::AsRawSocket;
 
+#[no_mangle]
+pub static BLOCK_SIGNALS_FAILED: u8 = 245;
+#[no_mangle]
+pub static SELECT_FAILED: u8 = 246;
+#[no_mangle]
+pub static CREATE_WINDOW_FAILED: u8 = 247;
+#[no_mangle]
+pub static REGISTER_CLASS_FAILED: u8 = 248;
+#[no_mangle]
+pub static EVENT_LOOP_FAILED: u8 = 249;
 pub const SEND_PARENT_RESPONSE_FAILED: u8 = 250;
 pub const INVALID_PARENT_REQUEST: u8 = 251;
 pub const READ_PARENT_REQUEST_FAILED: u8 = 252;
@@ -34,6 +47,8 @@ pub fn run() -> u8 {
             return START_RPC_SERVER_FAILED;
         }
     };
+
+    server.set_nonblocking(true).unwrap();
 
     // Write port file.
     let port = context
@@ -90,7 +105,16 @@ pub fn run() -> u8 {
         redirect_console_output(file.as_ptr());
     }
 
-    SUCCESS
+    // Enter event loop
+    #[cfg(target_family = "unix")]
+    unsafe {
+        event_loop(server.as_raw_fd())
+    }
+
+    #[cfg(target_family = "windows")]
+    unsafe {
+        event_loop(server.as_raw_socket())
+    }
 }
 
 extern "C" {
@@ -99,4 +123,10 @@ extern "C" {
 
     #[cfg(target_family = "windows")]
     fn redirect_console_output(file: *const std::os::raw::c_char);
+
+    #[cfg(target_family = "unix")]
+    fn event_loop(server: std::os::raw::c_int) -> u8;
+
+    #[cfg(target_family = "windows")]
+    fn event_loop(server: std::os::windows::raw::SOCKET) -> u8;
 }
