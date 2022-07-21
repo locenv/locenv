@@ -1,29 +1,26 @@
+#include "os.hpp"
+
 #include <iostream>
 #include <memory>
 #include <ostream>
 #include <sstream>
 #include <stdexcept>
 
-#include <stdint.h>
 #include <string.h>
 #include <windows.h>
+#include <winsock2.h>
 
-extern "C" {
-    extern const uint8_t SUCCESS;
-    extern const uint8_t CREATE_WINDOW_FAILED;
-    extern const uint8_t REGISTER_CLASS_FAILED;
-    extern const uint8_t EVENT_LOOP_FAILED;
-}
+#define WM_RPC_SERVER (WM_USER + 0)
 
-static LRESULT message_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-    return 0;
-}
+struct event_handler {
+    event_loop_handler_t handler;
+    void *context;
+};
 
 static std::unique_ptr<wchar_t[]> from_utf8(const char *utf8)
 {
     // Get buffer size.
-    auto bytes = (int)strlen(utf8) + 1;
+    auto bytes = static_cast<int>(strlen(utf8) + 1);
     auto required = MultiByteToWideChar(CP_UTF8, 0, utf8, bytes, nullptr, 0);
 
     if (!required) {
@@ -48,6 +45,41 @@ static std::unique_ptr<wchar_t[]> from_utf8(const char *utf8)
     }
 
     return buffer;
+}
+
+static LRESULT message_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+    auto handler = reinterpret_cast<const event_handler *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA));
+
+    if (!handler) {
+        auto code = GetLastError();
+        std::wcerr << L"Failed to get user data from the window (" << code << L")" << std::endl;
+        PostQuitMessage(GET_WINDOW_LONG_FAILED);
+        return 0;
+    }
+
+    switch (uMsg) {
+    case WM_RPC_SERVER:
+        {
+            auto server = reinterpret_cast<SOCKET>(wParam);
+            auto error = WSAGETSELECTERROR(lParam);
+
+            if (error) {
+                PostQuitMessage(WAIT_CLIENT_FAILED);
+                std::wcerr << L"An error occurred while waiting for a connection from RPC client (" << error << L")" << std::endl;
+                return 0;
+            }
+
+            auto result = handler->handler(handler->context, LOCENV_CLIENT_CONNECT, reinterpret_cast<const void *>(server));
+
+            if (result) {
+                PostQuitMessage(result);
+            }
+        }
+        break;
+    }
+
+    return 0;
 }
 
 extern "C" void redirect_console_output(const char *file)
@@ -86,9 +118,9 @@ extern "C" void redirect_console_output(const char *file)
     }
 }
 
-extern "C" uint8_t event_loop(SOCKET server)
+extern "C" uint8_t event_loop(SOCKET server, event_loop_handler_t handler, void *context)
 {
-    // Create message-only window.
+    // Create a message-only window to receive event from Windows.
     WNDCLASSEXW wc = {0};
 
     wc.cbSize = sizeof(wc);
@@ -112,6 +144,30 @@ extern "C" uint8_t event_loop(SOCKET server)
         return CREATE_WINDOW_FAILED;
     }
 
+    // Associate the handler with the window.
+    event_handler ud = {0};
+
+    ud.handler = handler;
+    ud.context = context;
+
+    SetLastError(0);
+
+    if (!SetWindowLongPtrW(wnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&ud))) {
+        auto code = GetLastError();
+
+        if (code) {
+            std::wcerr << L"Failed to associate an event handler with the window (" << code << L")" << std::endl;
+            return SET_WINDOW_LONG_FAILED;
+        }
+    }
+
+    // Listen for notification on RPC server.
+    if (WSAAsyncSelect(server, wnd, WM_RPC_SERVER, FD_ACCEPT) != 0) {
+        auto code = WSAGetLastError();
+        std::wcerr << L"Failed to listen for notification on RPC server (" << code << L")" << std::endl;
+        return ASYNC_SELECT_FAILED;
+    }
+
     // Process events until WM_QUIT.
     MSG msg;
     BOOL res;
@@ -127,5 +183,5 @@ extern "C" uint8_t event_loop(SOCKET server)
         }
     }
 
-    return SUCCESS;
+    return static_cast<uint8_t>(msg.wParam);
 }
