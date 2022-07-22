@@ -1,12 +1,6 @@
+use crate::service_manager::requests::Request;
 use http::header::{HeaderName, CONTENT_LENGTH};
 use http::{Method, Uri, Version};
-use reqmap_macros::HttpRequest;
-
-#[derive(HttpRequest)]
-pub enum Request {
-    #[get("/status")]
-    GetStatus,
-}
 
 pub struct State {
     request: Option<Request>,

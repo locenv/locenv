@@ -9,6 +9,7 @@ context = { path = "../context" }
 dirtree = { path = "../dirtree" }
 http = "0.2"
 module = { path = "../module" }
+percent-encoding = "2.1"
 reqmap-macros = { path = "../reqmap-macros" }
 script = { path = "../script" }
 serde = "1.0"

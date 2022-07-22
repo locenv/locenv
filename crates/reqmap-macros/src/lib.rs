@@ -1,5 +1,4 @@
-use proc_macro::TokenStream;
-use proc_macro2::Ident;
+use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::punctuated::Punctuated;
 use syn::{
@@ -9,7 +8,7 @@ use syn::{
 mod pattern;
 
 #[proc_macro_derive(HttpRequest, attributes(get))]
-pub fn derive_http_request(item: TokenStream) -> TokenStream {
+pub fn derive_http_request(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
     let data = match input.data {
         Data::Enum(v) => v,
@@ -17,10 +16,37 @@ pub fn derive_http_request(item: TokenStream) -> TokenStream {
     };
 
     // Iterate variants.
-    let mut gets: Vec<proc_macro2::TokenStream> = Vec::new();
+    let mut gets: Vec<TokenStream> = Vec::new();
+    let mut methods: Vec<TokenStream> = Vec::new();
+    let mut formats: Vec<TokenStream> = Vec::new();
 
     for variant in &data.variants {
+        let name = &variant.ident;
+
+        // Get inner fields.
+        let params: Vec<&TypePath> = match &variant.fields {
+            Fields::Unnamed(fields) => fields
+                .unnamed
+                .iter()
+                .map(|f| {
+                    if let Type::Path(t) = &f.ty {
+                        t
+                    } else {
+                        panic!("Invalid route parameter on {}", name);
+                    }
+                })
+                .collect(),
+            Fields::Unit => Vec::new(),
+            _ => panic!(
+                "{} must be a plain or have only one or more unnamed fields",
+                name
+            ),
+        };
+
         // Process attributes.
+        let mut method = "";
+        let mut pattern = String::new();
+
         for attr in &variant.attrs {
             let meta = match attr.parse_meta() {
                 Ok(r) => r,
@@ -29,53 +55,32 @@ pub fn derive_http_request(item: TokenStream) -> TokenStream {
 
             if let Meta::List(list) = &meta {
                 if list.path.is_ident("get") {
-                    let mut pattern: Option<String> = None;
-
                     for inner in &list.nested {
                         match inner {
                             NestedMeta::Meta(_) => {}
                             NestedMeta::Lit(inner) => {
                                 if let Lit::Str(inner) = inner {
-                                    pattern = Some(inner.value());
+                                    pattern = inner.value();
                                 }
                             }
                         }
                     }
 
-                    let pattern = if let Some(pattern) = &pattern {
-                        match pattern::parse(pattern) {
-                            Ok(r) => r,
-                            Err(e) => match e {
-                                pattern::ParseError::InvalidPattern => {
-                                    panic!("{} has invalid pattern", variant.ident)
-                                }
-                            },
-                        }
-                    } else {
-                        panic!("No pattern is specified on {}", variant.ident);
-                    };
+                    if pattern.is_empty() {
+                        panic!("No pattern is specified on {}", name);
+                    }
 
-                    let params: Vec<&TypePath> = match &variant.fields {
-                        Fields::Unnamed(inner) => inner
-                            .unnamed
-                            .iter()
-                            .map(|f| {
-                                if let Type::Path(v) = &f.ty {
-                                    v
-                                } else {
-                                    panic!("Invalid route parameter on {}", variant.ident);
-                                }
-                            })
-                            .collect(),
-                        Fields::Unit => Vec::new(),
-                        _ => panic!(
-                            "{} must be a plain or have a only one or more unnamed fields",
-                            variant.ident
-                        ),
+                    let pattern = match pattern::parse(&pattern) {
+                        Ok(r) => r,
+                        Err(e) => match e {
+                            pattern::ParseError::InvalidPattern => {
+                                panic!("{} has invalid pattern", name)
+                            }
+                        },
                     };
 
                     let count = pattern.len();
-                    let block = generate_pattern_matching(&variant.ident, &pattern, 0, &params, 0);
+                    let block = generate_pattern_matching(name, &pattern, 0, &params, 0);
                     let matching = quote! {
                         if segments.len() == #count {
                             #block
@@ -83,9 +88,58 @@ pub fn derive_http_request(item: TokenStream) -> TokenStream {
                     };
 
                     gets.push(matching);
+
+                    methods.push(if params.is_empty() {
+                        quote! {
+                            Self::#name => &http::method::Method::GET,
+                        }
+                    } else {
+                        let mut fields: Punctuated<Ident, Token![,]> = Punctuated::new();
+
+                        for _ in 0..params.len() {
+                            fields.push(format_ident!("_"));
+                        }
+
+                        quote! {
+                            Self::#name(#fields) => &http::method::Method::GET,
+                        }
+                    });
+
+                    method = "GET";
+                    break;
                 }
             }
         }
+
+        if pattern.is_empty() {
+            panic!("No HTTP method has been specified on {}", name)
+        }
+
+        // Generate formatter.
+        let mut fields: Punctuated<Ident, Token![,]> = Punctuated::new();
+
+        for i in 0..params.len() {
+            fields.push(format_ident!("p{}", i));
+        }
+
+        let name = if fields.is_empty() {
+            quote! { #name }
+        } else {
+            quote! { #name(#fields) }
+        };
+
+        let format = format!("{} {}", method, pattern);
+        let mut args: Punctuated<TokenStream, Token![,]> = Punctuated::new();
+
+        for f in &fields {
+            args.push(quote! {
+                percent_encoding::utf8_percent_encode(&#f.to_string(), percent_encoding::NON_ALPHANUMERIC)
+            });
+        }
+
+        formats.push(quote! {
+            Self::#name => write!(f, #format, #args),
+        });
     }
 
     // Generate implementation.
@@ -101,6 +155,20 @@ pub fn derive_http_request(item: TokenStream) -> TokenStream {
 
                 None
             }
+
+            pub fn method(&self) -> &'static http::method::Method {
+                match self {
+                    #( #methods )*
+                }
+            }
+        }
+
+        impl std::fmt::Display for #name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                match self {
+                    #( #formats )*
+                }
+            }
         }
     };
 
@@ -113,7 +181,7 @@ fn generate_pattern_matching(
     segment: usize,
     fields: &[&TypePath],
     param: usize,
-) -> proc_macro2::TokenStream {
+) -> TokenStream {
     if segment == pattern.len() {
         if fields.is_empty() {
             quote! {
@@ -136,8 +204,10 @@ fn generate_pattern_matching(
                 let next = generate_pattern_matching(variant, pattern, segment + 1, fields, param);
 
                 quote! {
-                    if segments[#segment] == #value {
-                        #next
+                    if let Ok(decoded) = percent_encoding::percent_decode_str(segments[#segment]).decode_utf8() {
+                        if decoded.as_ref() == #value {
+                            #next
+                        }
                     }
                 }
             }
@@ -148,11 +218,13 @@ fn generate_pattern_matching(
                     generate_pattern_matching(variant, pattern, segment + 1, fields, param + 1);
 
                 quote! {
-                    let segment = segments[#segment];
+                    if let Ok(decoded) = percent_encoding::percent_decode_str(segments[#segment]).decode_utf8() {
+                        let segment = decoded.as_ref();
 
-                    if !segment.is_empty() {
-                        if let Ok(#name) = segment.parse::<#ty>() {
-                            #next
+                        if !segment.is_empty() {
+                            if let Ok(#name) = segment.parse::<#ty>() {
+                                #next
+                            }
                         }
                     }
                 }

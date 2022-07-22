@@ -1,10 +1,15 @@
 use super::{Command, ServiceManagerState};
+use crate::service_manager::requests::Request;
 use crate::SUCCESS;
 use context::Context;
 use dirtree::File;
 use service::{ApplicationConfiguration, PlatformConfigurations, ServiceDefinition};
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::env::current_exe;
+use std::io::{Read, Write};
+use std::ops::{Deref, DerefMut};
+use std::process::{Child, Stdio};
 use std::time::SystemTime;
 
 pub(super) const COMMAND: Command = Command {
@@ -25,6 +30,7 @@ pub const READ_DEFINITION_FAILED: u8 = 51;
 pub const PLATFORM_NOT_SUPPORTED: u8 = 52;
 pub const DUPLICATED_CONFIGURATION: u8 = 53;
 pub const BUILD_FAILED: u8 = 54;
+pub const GET_SERVICE_MANAGER_STATUS_FAILED: u8 = 55;
 
 fn run(context: &Context, _: &clap::ArgMatches) -> u8 {
     // Load config.
@@ -173,5 +179,141 @@ fn run(context: &Context, _: &clap::ArgMatches) -> u8 {
         }
     }
 
+    // Start Service Manager.
+    if let Some(exit) = start_service_manager() {
+        return exit;
+    }
+
     SUCCESS
+}
+
+fn start_service_manager() -> Option<u8> {
+    // Launch Service Manager.
+    let process = std::process::Command::new(current_exe().unwrap())
+        .env("LOCENV_PROCESS_MODE", "service-manager")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    let mut guard = LaunchGuard {
+        process,
+        success: false,
+    };
+
+    let mut stdin = guard.stdin.take().unwrap();
+    let mut stdout = guard.stdout.take().unwrap();
+
+    // Wait for initialization completed.
+    let mut data: Vec<u8> = Vec::with_capacity(256);
+
+    write!(data, "{} HTTP/1.1\r\n\r\n", Request::GetStatus).unwrap();
+
+    if let Err(e) = stdin.write_all(&data) {
+        eprintln!(
+            "Failed to send a request to get Service Manager status: {}",
+            e
+        );
+        return Some(GET_SERVICE_MANAGER_STATUS_FAILED);
+    } else if let Err(e) = stdin.flush() {
+        eprintln!(
+            "Failed to send a request to get Service Manager status: {}",
+            e
+        );
+        return Some(GET_SERVICE_MANAGER_STATUS_FAILED);
+    }
+
+    data.clear();
+
+    'read_output: loop {
+        // Read output.
+        let mut buffer = [0u8; 256];
+        let count = match stdout.read(&mut buffer) {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("Failed to read Service Manager status: {}", e);
+                return Some(GET_SERVICE_MANAGER_STATUS_FAILED);
+            }
+        };
+
+        if count == 0 {
+            eprintln!("End of file has been reached while reading Service Manager status");
+            return Some(GET_SERVICE_MANAGER_STATUS_FAILED);
+        }
+
+        data.extend_from_slice(&buffer);
+
+        // Check status code.
+        for i in 0..data.len() {
+            let remaining = &data[i..data.len()];
+
+            if remaining.len() < 2 {
+                continue 'read_output;
+            } else if remaining[0] != b'\r' {
+                continue;
+            } else if remaining[1] != b'\n' {
+                eprintln!("Got an unexpected response from Service Manager");
+                return Some(GET_SERVICE_MANAGER_STATUS_FAILED);
+            }
+
+            let line = match std::str::from_utf8(&data[0..i]) {
+                Ok(r) => r,
+                Err(_) => {
+                    eprintln!("Got an unexpected response from Service Manager");
+                    return Some(GET_SERVICE_MANAGER_STATUS_FAILED);
+                }
+            };
+
+            let components: Vec<&str> = line.splitn(3, ' ').collect();
+
+            if components.len() < 2 || components[1] != "200" {
+                eprintln!("Got an unexpected response from Service Manager");
+                return Some(GET_SERVICE_MANAGER_STATUS_FAILED);
+            }
+
+            break 'read_output;
+        }
+    }
+
+    // Launch successfully.
+    guard.success = true;
+
+    None
+}
+
+struct LaunchGuard {
+    process: Child,
+    success: bool,
+}
+
+impl Deref for LaunchGuard {
+    type Target = Child;
+
+    fn deref(&self) -> &Self::Target {
+        &self.process
+    }
+}
+
+impl DerefMut for LaunchGuard {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.process
+    }
+}
+
+impl Drop for LaunchGuard {
+    fn drop(&mut self) {
+        if self.success {
+            return;
+        }
+
+        match self.process.kill() {
+            Ok(_) => {
+                self.process.wait().unwrap();
+            }
+            Err(e) => match e.kind() {
+                std::io::ErrorKind::InvalidInput => {}
+                _ => panic!("Failed to kill process {}", self.process.id()),
+            },
+        };
+    }
 }

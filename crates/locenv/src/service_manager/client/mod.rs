@@ -1,11 +1,12 @@
-use self::request::{HeaderError, State};
-use http::StatusCode;
+use self::state::{HeaderError, State};
+use super::requests::Request;
+use super::responses::Response;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::io::{stdin, stdout, Read, Stdin, Stdout, Write};
 use std::mem::MaybeUninit;
 
-mod request;
+mod state;
 
 /// Represents a client for the Service Manager.
 pub struct Client<C: Read + Write> {
@@ -23,7 +24,7 @@ impl<C: Read + Write> Client<C> {
         }
     }
 
-    pub fn receive(&mut self) -> Result<Request, ReceiveError> {
+    pub fn receive(&mut self) -> Result<RequestData, ReceiveError> {
         let mut buffer: [u8; 8192] = unsafe { MaybeUninit::uninit().assume_init() };
 
         'read_data: loop {
@@ -63,7 +64,7 @@ impl<C: Read + Write> Client<C> {
         let mut data: Vec<u8> = Vec::new();
 
         // Write headers.
-        write!(data, "HTTP/1.1 {}\r\n", response.code()).unwrap();
+        write!(data, "HTTP/1.1 {}\r\n", response.status_code()).unwrap();
         write!(data, "Content-Type: application/json\r\n").unwrap();
         write!(data, "Content-Length: {}\r\n", body.len()).unwrap();
         write!(data, "\r\n").unwrap();
@@ -88,6 +89,18 @@ impl<C: Read + Write> Client<C> {
             }
 
             total += written;
+        }
+
+        // Flush written data.
+        loop {
+            if let Err(e) = self.connection.flush() {
+                match e.kind() {
+                    std::io::ErrorKind::Interrupted | std::io::ErrorKind::WouldBlock => continue,
+                    _ => return Err(SendError::WriteFailed(e)),
+                }
+            }
+
+            break;
         }
 
         Ok(())
@@ -136,16 +149,16 @@ impl<C: Read + Write> Client<C> {
         Ok(false)
     }
 
-    fn decode_body(&mut self) -> Result<Request, ReceiveError> {
+    fn decode_body(&mut self) -> Result<RequestData, ReceiveError> {
         // Extract data.
         let (request, content_length) = self.state.complete();
         let body = self.buffer.drain(..content_length);
         let data = body.as_slice();
 
         match request {
-            request::Request::GetStatus => {
+            Request::GetStatus => {
                 if data.is_empty() {
-                    Ok(Request::GetStatus)
+                    Ok(RequestData::GetStatus)
                 } else {
                     Err(ReceiveError::InvalidRequest)
                 }
@@ -156,7 +169,7 @@ impl<C: Read + Write> Client<C> {
 
 /// Represents a request from the client.
 #[derive(Debug)]
-pub enum Request {
+pub enum RequestData {
     GetStatus,
 }
 
@@ -193,11 +206,6 @@ impl Display for ReceiveError {
             Self::InvalidRequest => f.write_str("invalid request"),
         }
     }
-}
-
-/// Represents a response to send back to the client.
-pub trait Response: serde::Serialize {
-    fn code(&self) -> StatusCode;
 }
 
 /// Represents an error when sending response back to the client failed.

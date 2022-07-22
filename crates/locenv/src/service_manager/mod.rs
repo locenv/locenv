@@ -1,3 +1,4 @@
+use self::client::RequestData;
 use self::responses::ServiceManagerStatus;
 use crate::SUCCESS;
 use context::Context;
@@ -53,6 +54,17 @@ pub fn run() -> u8 {
         }
     };
 
+    let pid = context
+        .project()
+        .runtime(true)
+        .unwrap()
+        .service_manager(true)
+        .unwrap()
+        .pid();
+    let pid = TempFile::new(pid);
+
+    pid.write(&std::process::id()).unwrap();
+
     // Start RPC server.
     let server = match TcpListener::bind("127.0.0.1:0") {
         Ok(r) => r,
@@ -67,9 +79,9 @@ pub fn run() -> u8 {
     // Write port file.
     let port = context
         .project()
-        .runtime(true)
+        .runtime(false)
         .unwrap()
-        .service_manager(true)
+        .service_manager(false)
         .unwrap()
         .port();
     let port = TempFile::new(port);
@@ -91,7 +103,7 @@ pub fn run() -> u8 {
     };
 
     match request {
-        client::Request::GetStatus => {
+        RequestData::GetStatus => {
             if let Err(e) = parent.send(ServiceManagerStatus::new()) {
                 eprintln!("Failed to response current status to the parent: {}", e);
                 return SEND_PARENT_RESPONSE_FAILED;

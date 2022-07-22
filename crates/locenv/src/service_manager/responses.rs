@@ -1,4 +1,3 @@
-use super::client::Response;
 use http::StatusCode;
 use serde::Serialize;
 
@@ -12,7 +11,12 @@ impl ServiceManagerStatus {
 }
 
 impl Response for ServiceManagerStatus {
-    fn code(&self) -> StatusCode {
+    fn status_code(&self) -> StatusCode {
         StatusCode::OK
     }
+}
+
+/// Represents a response to send back to the client.
+pub trait Response: serde::Serialize {
+    fn status_code(&self) -> StatusCode;
 }
