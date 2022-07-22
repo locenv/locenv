@@ -63,7 +63,7 @@ static LRESULT message_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     switch (uMsg) {
     case WM_RPC_SERVER:
         {
-            auto server = reinterpret_cast<SOCKET>(wParam);
+            auto server = static_cast<SOCKET>(wParam);
             auto error = WSAGETSELECTERROR(lParam);
 
             if (error) {
@@ -72,7 +72,7 @@ static LRESULT message_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
                 return 0;
             }
 
-            auto result = handler->handler(handler->context, LOCENV_CLIENT_CONNECT, reinterpret_cast<const void *>(server));
+            auto result = handler->handler(handler->context, LOCENV_CLIENT_CONNECT, static_cast<const void *>(server));
 
             if (result) {
                 PostQuitMessage(result);

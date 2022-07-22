@@ -8,6 +8,7 @@ fn main() {
         println!("cargo:rerun-if-changed=src/service_manager/os-posix.cpp");
     } else if cfg!(target_family = "windows") {
         c.file("src/service_manager/os-win32.cpp");
+        c.define("_WINSOCK_DEPRECATED_NO_WARNINGS", None);
 
         println!("cargo:rerun-if-changed=src/service_manager/os-win32.cpp");
     } else {
