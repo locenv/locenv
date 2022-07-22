@@ -84,17 +84,17 @@ static LRESULT message_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     return 0;
 }
 
-extern "C" void redirect_console_output(const char *file)
+extern "C" void enter_daemon(const char *log)
 {
     // Create file.
-    auto name = from_utf8(file);
+    auto name = from_utf8(log);
     auto handle = CreateFileW(name.get(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
 
     if (handle == INVALID_HANDLE_VALUE) {
         auto c = GetLastError();
         std::stringstream m;
 
-        m << "Cannot create " << file << " (" << c << ")";
+        m << "Cannot create " << log << " (" << c << ")";
 
         throw std::runtime_error(m.str());
     }
@@ -104,7 +104,7 @@ extern "C" void redirect_console_output(const char *file)
         auto c = GetLastError();
         std::stringstream m;
 
-        m << "Cannot use " << file << " as a standard output device (" << c << ")";
+        m << "Cannot use " << log << " as a standard output device (" << c << ")";
 
         throw std::runtime_error(m.str());
     }
@@ -114,7 +114,7 @@ extern "C" void redirect_console_output(const char *file)
         auto c = GetLastError();
         std::stringstream m;
 
-        m << "Cannot use " << file << " as a standard error device (" << c << ")";
+        m << "Cannot use " << log << " as a standard error device (" << c << ")";
 
         throw std::runtime_error(m.str());
     }

@@ -54,17 +54,6 @@ pub fn run() -> u8 {
         }
     };
 
-    let pid = context
-        .project()
-        .runtime(true)
-        .unwrap()
-        .service_manager(true)
-        .unwrap()
-        .pid();
-    let pid = TempFile::new(pid);
-
-    pid.write(&std::process::id()).unwrap();
-
     // Start RPC server.
     let server = match TcpListener::bind("127.0.0.1:0") {
         Ok(r) => r,
@@ -79,9 +68,9 @@ pub fn run() -> u8 {
     // Write port file.
     let port = context
         .project()
-        .runtime(false)
+        .runtime(true)
         .unwrap()
-        .service_manager(false)
+        .service_manager(true)
         .unwrap()
         .port();
     let port = TempFile::new(port);
@@ -117,19 +106,31 @@ pub fn run() -> u8 {
 
     drop(parent);
 
-    // Redirect STDOUT and STDERR to log file.
+    // Enter background.
     unsafe {
-        let file = context
+        let log = context
             .project()
             .runtime(false)
             .unwrap()
             .service_manager(false)
             .unwrap()
             .log();
-        let file = CString::new(file.to_str().unwrap()).unwrap();
+        let log = CString::new(log.to_str().unwrap()).unwrap();
 
-        redirect_console_output(file.as_ptr());
+        enter_daemon(log.as_ptr());
     }
+
+    // Write PID file.
+    let pid = context
+        .project()
+        .runtime(false)
+        .unwrap()
+        .service_manager(false)
+        .unwrap()
+        .pid();
+    let pid = TempFile::new(pid);
+
+    pid.write(&std::process::id()).unwrap();
 
     // Enter event loop.
     #[cfg(target_family = "unix")]
@@ -196,10 +197,10 @@ type EventLoopHandler = unsafe extern "C" fn(*mut c_void, u32, *const c_void) ->
 
 extern "C" {
     #[cfg(target_family = "unix")]
-    fn redirect_console_output(file: *const std::os::raw::c_char);
+    fn enter_daemon(log: *const std::os::raw::c_char);
 
     #[cfg(target_family = "windows")]
-    fn redirect_console_output(file: *const std::os::raw::c_char);
+    fn enter_daemon(log: *const std::os::raw::c_char);
 
     #[cfg(target_family = "unix")]
     fn event_loop(

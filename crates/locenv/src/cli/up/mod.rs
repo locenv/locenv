@@ -31,6 +31,7 @@ pub const PLATFORM_NOT_SUPPORTED: u8 = 52;
 pub const DUPLICATED_CONFIGURATION: u8 = 53;
 pub const BUILD_FAILED: u8 = 54;
 pub const GET_SERVICE_MANAGER_STATUS_FAILED: u8 = 55;
+pub const SERVICE_MANAGER_FAILED: u8 = 56;
 
 fn run(context: &Context, _: &clap::ArgMatches) -> u8 {
     // Load config.
@@ -272,6 +273,21 @@ fn start_service_manager() -> Option<u8> {
             }
 
             break 'read_output;
+        }
+    }
+
+    // On *nix we do double fork to prevent Service Manager accidentally acquiring a controlling terminal.
+    #[cfg(target_family = "unix")]
+    match guard.process.wait() {
+        Ok(s) => {
+            if !s.success() {
+                eprintln!("Service Manager failed to become a daemon");
+                return Some(SERVICE_MANAGER_FAILED);
+            }
+        }
+        Err(e) => {
+            eprintln!("Failed to wait for Service Manager become a daemon: {}", e);
+            return Some(GET_SERVICE_MANAGER_STATUS_FAILED);
         }
     }
 

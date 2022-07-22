@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/select.h>
 #include <unistd.h>
@@ -19,16 +20,16 @@ static void handle_signal(int)
     terminating = true;
 }
 
-extern "C" void redirect_console_output(const char *file)
+extern "C" void enter_daemon(const char *log)
 {
-    // Create a file.
-    auto fd = open(file, O_CREAT | O_WRONLY | O_TRUNC | O_CLOEXEC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    // Create a log file.
+    auto fd = open(log, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 
     if (fd < 0) {
         auto c = errno;
         std::stringstream m;
 
-        m << "Cannot open " << file << ": " << strerror(c);
+        m << "Cannot open " << log << ": " << strerror(c);
 
         throw std::runtime_error(m.str());
     }
@@ -38,7 +39,7 @@ extern "C" void redirect_console_output(const char *file)
         auto c = errno;
         std::stringstream m;
 
-        m << "Failed to set stdout to " << file << ": " << strerror(c);
+        m << "Failed to set stdout to " << log << ": " << strerror(c);
 
         throw std::runtime_error(m.str());
     }
@@ -48,13 +49,42 @@ extern "C" void redirect_console_output(const char *file)
         auto c = errno;
         std::stringstream m;
 
-        m << "Failed to set stderr to " << file << ": " << strerror(c);
+        m << "Failed to set stderr to " << log << ": " << strerror(c);
 
         throw std::runtime_error(m.str());
     }
 
     // Close the original FD.
     close(fd);
+
+    // Create a new session and become a session leader.
+    if (setsid() < 0) {
+        auto c = errno;
+        std::stringstream m;
+
+        m << "Start new session failed: " << strerror(c);
+
+        throw std::runtime_error(m.str());
+    }
+
+    // Kill the current process so we are not running as a session leader so we cannot accidentally acquire a controlling terminal.
+    switch (fork()) {
+    case -1: // Error.
+        {
+            auto c = errno;
+            std::stringstream m;
+
+            m << "Fork failed: " << strerror(c);
+
+            throw std::runtime_error(m.str());
+        }
+        break;
+    case 0: // We are in the child.
+        break;
+    default: // We are in the parent.
+        // Use exit instead of return otherwise Rust object will get destructed.
+        exit(SUCCESS);
+    }
 }
 
 extern "C" uint8_t event_loop(int server, event_loop_handler_t handler, void *context)
