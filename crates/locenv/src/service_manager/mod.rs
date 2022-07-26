@@ -1,41 +1,22 @@
-use self::client::RequestData;
-use self::responses::ServiceManagerStatus;
-use crate::SUCCESS;
 use context::Context;
 use dirtree::TempFile;
 use std::ffi::{c_void, CString};
+use std::io::Write;
 use std::mem::transmute;
 use std::net::{SocketAddr, TcpListener};
-#[cfg(target_family = "unix")]
-use std::os::unix::prelude::AsRawFd;
-#[cfg(target_family = "windows")]
-use std::os::windows::io::AsRawSocket;
+use std::os::raw::c_char;
+use std::path::PathBuf;
 
-#[no_mangle]
-pub static SIGACTION_FAILED: u8 = 238;
-pub const INVALID_SERVER_SOCKET: u8 = 239;
-pub const UNKNOW_EVENT: u8 = 240;
-#[no_mangle]
-pub static WAIT_CLIENT_FAILED: u8 = 241;
-#[no_mangle]
-pub static GET_WINDOW_LONG_FAILED: u8 = 242;
-#[no_mangle]
-pub static SET_WINDOW_LONG_FAILED: u8 = 243;
-#[no_mangle]
-pub static ASYNC_SELECT_FAILED: u8 = 244;
-#[no_mangle]
-pub static BLOCK_SIGNALS_FAILED: u8 = 245;
 #[no_mangle]
 pub static SELECT_FAILED: u8 = 246;
 #[no_mangle]
-pub static CREATE_WINDOW_FAILED: u8 = 247;
+pub static RESET_NOTIFICATION_FAILED: u8 = 248;
 #[no_mangle]
-pub static REGISTER_CLASS_FAILED: u8 = 248;
+pub static WAIT_EVENTS_FAILED: u8 = 250;
 #[no_mangle]
-pub static EVENT_LOOP_FAILED: u8 = 249;
-pub const SEND_PARENT_RESPONSE_FAILED: u8 = 250;
-pub const INVALID_PARENT_REQUEST: u8 = 251;
-pub const READ_PARENT_REQUEST_FAILED: u8 = 252;
+pub static NO_EVENT_SOURCES: u8 = 251;
+#[no_mangle]
+pub static DISPATCHER_TERMINATED: u8 = 252;
 pub const START_RPC_SERVER_FAILED: u8 = 253;
 pub const INITIALIZATION_FAILED: u8 = 254;
 
@@ -43,6 +24,7 @@ pub mod requests;
 pub mod responses;
 
 mod client;
+mod dispatcher;
 
 pub fn run() -> u8 {
     // Initialize foundation.
@@ -82,43 +64,29 @@ pub fn run() -> u8 {
     .unwrap();
 
     // Report status to the parent.
-    let mut parent = client::Client::new(client::ConsoleConnection::new());
-    let request = match parent.receive() {
-        Ok(r) => r,
-        Err(e) => {
-            eprintln!("Failed to read the request from the parent: {}", e);
-            return READ_PARENT_REQUEST_FAILED;
-        }
-    };
-
-    match request {
-        RequestData::GetStatus => {
-            if let Err(e) = parent.send(ServiceManagerStatus::new()) {
-                eprintln!("Failed to response current status to the parent: {}", e);
-                return SEND_PARENT_RESPONSE_FAILED;
-            }
-        }
-        r => {
-            eprintln!("Found an unexpected request from the parent: {:?}", r);
-            return INVALID_PARENT_REQUEST;
-        }
-    }
-
-    drop(parent);
+    print!("locenv-ok");
+    std::io::stdout().flush().unwrap();
 
     // Enter background.
-    unsafe {
-        let log = context
-            .project()
-            .runtime(false)
-            .unwrap()
-            .service_manager(false)
-            .unwrap()
-            .log();
-        let log = CString::new(log.to_str().unwrap()).unwrap();
+    let log = context
+        .project()
+        .runtime(false)
+        .unwrap()
+        .service_manager(false)
+        .unwrap()
+        .log();
 
-        enter_daemon(log.as_ptr());
-    }
+    let data = DaemonData {
+        context: Some(context),
+        server: Some(server),
+    };
+
+    daemon(log, data)
+}
+
+async fn main(data: &mut DaemonData) {
+    let context = data.context.take().unwrap();
+    let server = data.server.take().unwrap();
 
     // Write PID file.
     let pid = context
@@ -132,87 +100,38 @@ pub fn run() -> u8 {
 
     pid.write(&std::process::id()).unwrap();
 
-    // Enter event loop.
-    #[cfg(target_family = "unix")]
-    let socket = server.as_raw_fd();
-    #[cfg(target_family = "windows")]
-    let socket = server.as_raw_socket();
-    let handler = EventHandler { server };
-
-    unsafe { event_loop(socket, process_event, transmute(&handler)) }
-}
-
-struct EventHandler {
-    server: TcpListener,
-}
-
-impl EventHandler {
-    fn handle_client_connect(&mut self, data: *const c_void) -> u8 {
-        // Check if the triggered socket is the same as what we have.
-        #[cfg(target_family = "unix")]
-        let valid = {
-            let socket = data as std::os::unix::io::RawFd;
-
-            socket == self.server.as_raw_fd()
-        };
-
-        #[cfg(target_family = "windows")]
-        let valid = {
-            let socket = data as std::os::windows::io::RawSocket;
-
-            socket == self.server.as_raw_socket();
-        };
-
-        if !valid {
-            eprintln!("Got an unexpected server socket from client connect event");
-            return INVALID_SERVER_SOCKET;
-        }
-
-        SUCCESS
-    }
-
-    unsafe fn execute(&mut self, event: u32, data: *const c_void) -> u8 {
-        match event {
-            EVENT_CLIENT_CONNECT => self.handle_client_connect(data),
-            _ => {
-                eprintln!(
-                    "Got an unexpected event {} from the event dispatcher",
-                    event
-                );
-                UNKNOW_EVENT
+    // Enter main loop.
+    loop {
+        // Accept a connection from RPC client
+        let (client, from) = match dispatcher::accept(&server).await {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("Failed to accept a connection from RPC client: {}", e);
+                continue;
             }
-        }
+        };
     }
 }
 
-const EVENT_CLIENT_CONNECT: u32 = 0;
+fn daemon(log: PathBuf, mut data: DaemonData) -> u8 {
+    let log = CString::new(log.to_str().unwrap()).unwrap();
 
-unsafe extern "C" fn process_event(context: *mut c_void, event: u32, data: *const c_void) -> u8 {
-    let h: *mut EventHandler = transmute(context);
-
-    (*h).execute(event, data)
+    unsafe { enter_daemon(log.as_ptr(), daemon_procedure, transmute(&mut data)) }
 }
 
-type EventLoopHandler = unsafe extern "C" fn(*mut c_void, u32, *const c_void) -> u8;
+unsafe extern "C" fn daemon_procedure(context: *mut c_void) -> u8 {
+    let data: *mut DaemonData = transmute(context);
+
+    dispatcher::run(main(&mut *data))
+}
+
+struct DaemonData {
+    context: Option<Context>,
+    server: Option<TcpListener>,
+}
+
+type DaemonProcedure = unsafe extern "C" fn(*mut c_void) -> u8;
 
 extern "C" {
-    #[cfg(target_family = "unix")]
-    fn enter_daemon(log: *const std::os::raw::c_char);
-
-    #[cfg(target_family = "windows")]
-    fn enter_daemon(log: *const std::os::raw::c_char);
-
-    #[cfg(target_family = "unix")]
-    fn event_loop(
-        server: std::os::raw::c_int,
-        handler: EventLoopHandler,
-        context: *mut c_void,
-    ) -> u8;
-
-    #[cfg(target_family = "windows")]
-    fn event_loop(
-        server: std::os::windows::raw::SOCKET,
-        handler: EventLoopHandler,
-        context: *mut c_void,
-    ) -> u8;
+    fn enter_daemon(log: *const c_char, daemon: DaemonProcedure, context: *mut c_void) -> u8;
 }

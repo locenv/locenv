@@ -3,7 +3,7 @@ use super::requests::Request;
 use super::responses::Response;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::io::{stdin, stdout, Read, Stdin, Stdout, Write};
+use std::io::{Read, Write};
 use std::mem::MaybeUninit;
 
 mod state;
@@ -230,36 +230,5 @@ impl Display for SendError {
             Self::WriteFailed(_) => f.write_str("failed to write data"),
             Self::EndOfFile => f.write_str("end of file has been reached"),
         }
-    }
-}
-
-/// Represents a connection that connect to STDIN and STDOUT.
-pub(super) struct ConsoleConnection {
-    stdin: Stdin,
-    stdout: Stdout,
-}
-
-impl ConsoleConnection {
-    pub fn new() -> Self {
-        Self {
-            stdin: stdin(),
-            stdout: stdout(),
-        }
-    }
-}
-
-impl Read for ConsoleConnection {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        self.stdin.read(buf)
-    }
-}
-
-impl Write for ConsoleConnection {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.stdout.write(buf)
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.stdout.flush()
     }
 }

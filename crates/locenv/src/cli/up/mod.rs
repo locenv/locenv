@@ -1,5 +1,4 @@
 use super::{Command, ServiceManagerState};
-use crate::service_manager::requests::Request;
 use crate::SUCCESS;
 use context::Context;
 use dirtree::File;
@@ -7,7 +6,7 @@ use service::{ApplicationConfiguration, PlatformConfigurations, ServiceDefinitio
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::env::current_exe;
-use std::io::{Read, Write};
+use std::io::Read;
 use std::ops::{Deref, DerefMut};
 use std::process::{Child, Stdio};
 use std::time::SystemTime;
@@ -192,7 +191,7 @@ fn start_service_manager() -> Option<u8> {
     // Launch Service Manager.
     let process = std::process::Command::new(current_exe().unwrap())
         .env("LOCENV_PROCESS_MODE", "service-manager")
-        .stdin(Stdio::piped())
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .spawn()
         .unwrap();
@@ -202,79 +201,36 @@ fn start_service_manager() -> Option<u8> {
         success: false,
     };
 
-    let mut stdin = guard.stdin.take().unwrap();
     let mut stdout = guard.stdout.take().unwrap();
 
     // Wait for initialization completed.
-    let mut data: Vec<u8> = Vec::with_capacity(256);
-
-    write!(data, "{} HTTP/1.1\r\n\r\n", Request::GetStatus).unwrap();
-
-    if let Err(e) = stdin.write_all(&data) {
-        eprintln!(
-            "Failed to send a request to get Service Manager status: {}",
-            e
-        );
-        return Some(GET_SERVICE_MANAGER_STATUS_FAILED);
-    } else if let Err(e) = stdin.flush() {
-        eprintln!(
-            "Failed to send a request to get Service Manager status: {}",
-            e
-        );
-        return Some(GET_SERVICE_MANAGER_STATUS_FAILED);
-    }
-
-    data.clear();
-
-    'read_output: loop {
-        // Read output.
-        let mut buffer = [0u8; 256];
-        let count = match stdout.read(&mut buffer) {
-            Ok(r) => r,
-            Err(e) => {
-                eprintln!("Failed to read Service Manager status: {}", e);
-                return Some(GET_SERVICE_MANAGER_STATUS_FAILED);
-            }
-        };
-
-        if count == 0 {
-            eprintln!("End of file has been reached while reading Service Manager status");
+    let mut output = [0u8; 256];
+    let count = match stdout.read(&mut output) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("Failed to read Service Manager status: {}", e);
             return Some(GET_SERVICE_MANAGER_STATUS_FAILED);
         }
+    };
 
-        data.extend_from_slice(&buffer);
-
-        // Check status code.
-        for i in 0..data.len() {
-            let remaining = &data[i..data.len()];
-
-            if remaining.len() < 2 {
-                continue 'read_output;
-            } else if remaining[0] != b'\r' {
-                continue;
-            } else if remaining[1] != b'\n' {
-                eprintln!("Got an unexpected response from Service Manager");
-                return Some(GET_SERVICE_MANAGER_STATUS_FAILED);
-            }
-
-            let line = match std::str::from_utf8(&data[0..i]) {
-                Ok(r) => r,
-                Err(_) => {
-                    eprintln!("Got an unexpected response from Service Manager");
-                    return Some(GET_SERVICE_MANAGER_STATUS_FAILED);
-                }
-            };
-
-            let components: Vec<&str> = line.splitn(3, ' ').collect();
-
-            if components.len() < 2 || components[1] != "200" {
-                eprintln!("Got an unexpected response from Service Manager");
-                return Some(GET_SERVICE_MANAGER_STATUS_FAILED);
-            }
-
-            break 'read_output;
-        }
+    if count == 0 {
+        eprintln!("End of file has been reached while reading Service Manager status");
+        return Some(GET_SERVICE_MANAGER_STATUS_FAILED);
     }
+
+    // Check status.
+    match std::str::from_utf8(&output[..count]) {
+        Ok(r) => {
+            if r != "locenv-ok" {
+                eprintln!("Got an unexpected response from Service Manager");
+                return Some(GET_SERVICE_MANAGER_STATUS_FAILED);
+            }
+        }
+        Err(_) => {
+            eprintln!("Got an unexpected response from Service Manager");
+            return Some(GET_SERVICE_MANAGER_STATUS_FAILED);
+        }
+    };
 
     // On *nix we do double fork to prevent Service Manager accidentally acquiring a controlling terminal.
     #[cfg(target_family = "unix")]

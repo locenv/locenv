@@ -13,6 +13,9 @@
 #include <sys/select.h>
 #include <unistd.h>
 
+static sigset_t mask;
+static int max_fd;
+static fd_set readfds;
 static bool terminating;
 
 static void handle_signal(int)
@@ -20,7 +23,7 @@ static void handle_signal(int)
     terminating = true;
 }
 
-extern "C" void enter_daemon(const char *log)
+extern "C" uint8_t enter_daemon(const char *log, uint8_t (*daemon) (void *), void *context)
 {
     // Create a log file.
     auto fd = open(log, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
@@ -85,19 +88,17 @@ extern "C" void enter_daemon(const char *log)
         // Use exit instead of return otherwise Rust object will get destructed.
         exit(SUCCESS);
     }
-}
 
-extern "C" uint8_t event_loop(int server, event_loop_handler_t handler, void *context)
-{
     // Block all signals.
-    sigset_t mask;
-
     sigfillset(&mask);
 
     if (sigprocmask(SIG_SETMASK, &mask, nullptr) < 0) {
         auto c = errno;
-        std::cout << "Failed to block signals: " << strerror(c) << std::endl;
-        return BLOCK_SIGNALS_FAILED;
+        std::stringstream m;
+
+        m << "Failed to block signals: " << strerror(c);
+
+        throw new std::runtime_error(m.str());
     }
 
     // Set SIGTERM handler.
@@ -109,32 +110,46 @@ extern "C" uint8_t event_loop(int server, event_loop_handler_t handler, void *co
 
     if (sigaction(SIGTERM, &act, nullptr) < 0) {
         auto c = errno;
-        std::cout << "Failed to install SIGTERM handler: " << strerror(c) << std::endl;
-        return SIGACTION_FAILED;
+        std::stringstream m;
+
+        m << "Failed to install SIGTERM handler: " << strerror(c);
+
+        throw new std::runtime_error(m.str());
     }
-
-    // Enter event loop.
-    int max = server + 1;
-    fd_set descriptors;
-
-    FD_ZERO(&descriptors);
-    FD_SET(server, &descriptors);
 
     sigdelset(&mask, SIGTERM);
 
+    return daemon(context);
+}
+
+extern "C" void register_for_accept(int fd)
+{
+    if (fd >= max_fd) {
+        max_fd = fd + 1;
+    }
+
+    FD_SET(fd, &readfds);
+}
+
+extern "C" uint8_t dispatch_events(void (*handler) (int))
+{
+    if (!max_fd) {
+        return NO_EVENT_SOURCES;
+    }
+
     for (;;) {
         // Wait for events.
-        fd_set ready;
+        fd_set readfds;
         int remaining;
 
-        memcpy(&ready, &descriptors, sizeof(fd_set));
+        memcpy(&readfds, &::readfds, sizeof(fd_set));
 
-        if ((remaining = pselect(max, &ready, nullptr, nullptr, nullptr, &mask)) < 0) {
+        if ((remaining = pselect(max_fd, &readfds, nullptr, nullptr, nullptr, &mask)) < 0) {
             auto c = errno;
 
             if (c == EINTR) {
                 if (terminating) {
-                    return SUCCESS;
+                    return DISPATCHER_TERMINATED;
                 }
 
                 continue;
@@ -144,23 +159,18 @@ extern "C" uint8_t event_loop(int server, event_loop_handler_t handler, void *co
             return SELECT_FAILED;
         }
 
-        // Process event.
-        for (int fd = 0; remaining && fd < max; fd++) {
-            uint8_t res = 0;
-
-            if (!FD_ISSET(fd, &ready)) {
+        // Invoke handler.
+        for (int fd = 0; remaining && fd < max_fd; fd++) {
+            if (FD_ISSET(fd, &readfds)) {
+                FD_CLR(fd, &::readfds);
+            } else {
                 continue;
             }
 
-            if (fd == server) {
-                res = handler(context, LOCENV_CLIENT_CONNECT, reinterpret_cast<const void *>(fd));
-            }
-
-            if (res) {
-                return res;
-            }
-
+            handler(fd);
             remaining--;
         }
+
+        return SUCCESS;
     }
 }
