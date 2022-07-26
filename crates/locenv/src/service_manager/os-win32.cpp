@@ -125,7 +125,7 @@ extern "C" uint8_t enter_daemon(const char *log, unsigned (*daemon) (void *), vo
     }
 
     // Start daemon in a separated thread due to Windows required the main thread to be message loop.
-    auto runner = _beginthreadex(nullptr, 0, daemon, context, 0, nullptr);
+    auto runner = reinterpret_cast<HANDLE>(_beginthreadex(nullptr, 0, daemon, context, 0, nullptr));
 
     if (!runner) {
         auto code = errno;
@@ -182,7 +182,7 @@ extern "C" uint8_t enter_daemon(const char *log, unsigned (*daemon) (void *), vo
 
     CloseHandle(runner);
 
-    return static_case<uint8_t>(status);
+    return static_cast<uint8_t>(status);
 }
 
 extern "C" void register_for_accept(SOCKET socket)
