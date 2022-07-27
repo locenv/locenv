@@ -15,6 +15,12 @@ fn main() {
     }
 
     c.cpp(true);
+
+    if std::env::var("TARGET").unwrap().contains("apple") {
+        // Clang on XCode use C++98 (or C++03) by default.
+        c.flag("-std=c++17");
+    }
+
     c.compile("kami-os");
 
     // Do not choose libstdc++ on Linux for the user.
