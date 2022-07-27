@@ -10,17 +10,17 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/select.h>
 #include <unistd.h>
 
-static sigset_t mask;
-static int max_fd;
-static fd_set readfds;
-static bool terminating;
+static int terminating;
 
 static void handle_signal(int)
 {
-    terminating = true;
+    terminating = 1;
+}
+
+extern "C" int is_shutdown_requested() {
+    return terminating;
 }
 
 extern "C" uint8_t enter_daemon(const char *log, uint8_t (*daemon) (void *), void *context)
@@ -90,6 +90,8 @@ extern "C" uint8_t enter_daemon(const char *log, uint8_t (*daemon) (void *), voi
     }
 
     // Block all signals.
+    sigset_t mask;
+
     sigfillset(&mask);
 
     if (sigprocmask(SIG_SETMASK, &mask, nullptr) < 0) {
@@ -117,60 +119,5 @@ extern "C" uint8_t enter_daemon(const char *log, uint8_t (*daemon) (void *), voi
         throw new std::runtime_error(m.str());
     }
 
-    sigdelset(&mask, SIGTERM);
-
     return daemon(context);
-}
-
-extern "C" void register_for_accept(int fd)
-{
-    if (fd >= max_fd) {
-        max_fd = fd + 1;
-    }
-
-    FD_SET(fd, &readfds);
-}
-
-extern "C" uint8_t dispatch_events(void (*handler) (int))
-{
-    if (!max_fd) {
-        return NO_EVENT_SOURCES;
-    }
-
-    for (;;) {
-        // Wait for events.
-        fd_set readfds;
-        int remaining;
-
-        memcpy(&readfds, &::readfds, sizeof(fd_set));
-
-        if ((remaining = pselect(max_fd, &readfds, nullptr, nullptr, nullptr, &mask)) < 0) {
-            auto c = errno;
-
-            if (c == EINTR) {
-                if (terminating) {
-                    return DISPATCHER_TERMINATED;
-                }
-
-                continue;
-            }
-
-            std::cout << "Failed to wait for events: " << strerror(c) << std::endl;
-            return SELECT_FAILED;
-        }
-
-        // Invoke handler.
-        for (int fd = 0; remaining && fd < max_fd; fd++) {
-            if (FD_ISSET(fd, &readfds)) {
-                FD_CLR(fd, &::readfds);
-            } else {
-                continue;
-            }
-
-            handler(fd);
-            remaining--;
-        }
-
-        return SUCCESS;
-    }
 }

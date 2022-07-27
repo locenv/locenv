@@ -506,6 +506,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "kami"
+version = "0.1.0"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "kuro"
 version = "0.1.0"
 dependencies = [
@@ -598,6 +605,7 @@ dependencies = [
  "context",
  "dirtree",
  "http",
+ "kami",
  "module",
  "percent-encoding",
  "reqmap-macros",

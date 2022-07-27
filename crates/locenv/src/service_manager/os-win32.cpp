@@ -9,19 +9,15 @@
 #include <errno.h>
 #include <process.h>
 #include <string.h>
-#include <winsock2.h>
 
 // windows.h required to included after the other headers otherwise it will cause redefinition error.
 #include <windows.h>
 
-static DWORD total;
-static SOCKET sockets[WSA_MAXIMUM_WAIT_EVENTS];
-static WSAEVENT events[WSA_MAXIMUM_WAIT_EVENTS];
-static bool terminating;
+static int terminating;
 
 static void shutdown(ULONG_PTR Parameter)
 {
-    terminating = true;
+    terminating = 1;
 }
 
 static std::unique_ptr<wchar_t[]> from_utf8(const char *utf8)
@@ -57,6 +53,11 @@ static std::unique_ptr<wchar_t[]> from_utf8(const char *utf8)
 static LRESULT message_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     return 0;
+}
+
+extern "C" int is_shutdown_requested()
+{
+    return terminating;
 }
 
 extern "C" uint8_t enter_daemon(const char *log, unsigned (*daemon) (void *), void *context)
@@ -183,77 +184,4 @@ extern "C" uint8_t enter_daemon(const char *log, unsigned (*daemon) (void *), vo
     CloseHandle(runner);
 
     return static_cast<uint8_t>(status);
-}
-
-extern "C" void register_for_accept(SOCKET socket)
-{
-    if (total == WSA_MAXIMUM_WAIT_EVENTS) {
-        throw std::runtime_error("The amount of connection has been exceed the limit");
-    }
-
-    // Create event handle.
-    auto event = WSACreateEvent();
-
-    if (event == WSA_INVALID_EVENT) {
-        auto c = WSAGetLastError();
-        std::stringstream m;
-
-        m << "Failed to create event handle (" << c << ")";
-
-        throw std::runtime_error(m.str());
-    }
-
-    // Listen for the event.
-    if (WSAEventSelect(socket, event, FD_ACCEPT) == SOCKET_ERROR) {
-        auto c = WSAGetLastError();
-        std::stringstream m;
-
-        m << "Failed to listen for connection (" << c << ")";
-
-        throw std::runtime_error(m.str());
-    }
-
-    sockets[total] = socket;
-    events[total] = event;
-    total++;
-}
-
-extern "C" uint8_t dispatch_events(void (*handler) (SOCKET))
-{
-    if (!total) {
-        return NO_EVENT_SOURCES;
-    }
-
-    for (;;) {
-        auto result = WSAWaitForMultipleEvents(total, events, FALSE, WSA_INFINITE, TRUE);
-
-        if (result == WSA_WAIT_FAILED) {
-            auto c = WSAGetLastError();
-            std::wcerr << L"Failed to wait for network events (" << c << L")" << std::endl;
-            return WAIT_EVENTS_FAILED;
-        } else if (result == WSA_WAIT_IO_COMPLETION) {
-            if (terminating) {
-                return DISPATCHER_TERMINATED;
-            }
-
-            continue;
-        }
-
-        for (auto i = result - WSA_WAIT_EVENT_0; i < total; i++) {
-            // Reset event.
-            if (WSAEventSelect(sockets[i], events[i], 0) == SOCKET_ERROR) {
-                auto c = WSAGetLastError();
-                std::wcerr << L"Failed to reset event notification (" << c << L")" << std::endl;
-                return RESET_NOTIFICATION_FAILED;
-            }
-
-            WSACloseEvent(events[i]);
-
-            handler(sockets[i]);
-        }
-
-        total = result - WSA_WAIT_EVENT_0;
-
-        return SUCCESS;
-    }
 }

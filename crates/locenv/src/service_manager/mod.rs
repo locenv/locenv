@@ -1,22 +1,13 @@
+use crate::SUCCESS;
 use context::Context;
 use dirtree::TempFile;
 use std::ffi::{c_void, CString};
 use std::io::Write;
 use std::mem::transmute;
 use std::net::{SocketAddr, TcpListener};
-use std::os::raw::c_char;
+use std::os::raw::{c_char, c_int};
 use std::path::PathBuf;
 
-#[no_mangle]
-pub static SELECT_FAILED: u8 = 246;
-#[no_mangle]
-pub static RESET_NOTIFICATION_FAILED: u8 = 248;
-#[no_mangle]
-pub static WAIT_EVENTS_FAILED: u8 = 250;
-#[no_mangle]
-pub static NO_EVENT_SOURCES: u8 = 251;
-#[no_mangle]
-pub static DISPATCHER_TERMINATED: u8 = 252;
 pub const START_RPC_SERVER_FAILED: u8 = 253;
 pub const INITIALIZATION_FAILED: u8 = 254;
 
@@ -24,7 +15,6 @@ pub mod requests;
 pub mod responses;
 
 mod client;
-mod dispatcher;
 
 pub fn run() -> u8 {
     // Initialize foundation.
@@ -103,7 +93,7 @@ async fn main(data: &mut DaemonData) {
     // Enter main loop.
     loop {
         // Accept a connection from RPC client
-        let (client, from) = match dispatcher::accept(&server).await {
+        let (client, from) = match kami::accept(&server).await {
             Ok(r) => r,
             Err(e) => {
                 eprintln!("Failed to accept a connection from RPC client: {}", e);
@@ -119,10 +109,31 @@ fn daemon(log: PathBuf, mut data: DaemonData) -> u8 {
     unsafe { enter_daemon(log.as_ptr(), daemon_procedure, transmute(&mut data)) }
 }
 
+#[cfg(target_family = "unix")]
+fn create_dispatcher() -> kami::dispatcher::unix::Pselect {
+    let mut d = kami::dispatcher::unix::Pselect::new();
+
+    d.allow_signal(15); // SIGTERM
+    d.set_interrupt_handler(|| unsafe { is_shutdown_requested() } == 0);
+
+    d
+}
+
+#[cfg(target_family = "windows")]
+fn create_dispatcher() -> kami::dispatcher::win32::WinsockEvent {
+    let mut d = kami::dispatcher::win32::WinsockEvent::new();
+
+    d.set_interrupt_handler(|| unsafe { is_shutdown_requested() } == 0);
+
+    d
+}
+
 unsafe extern "C" fn daemon_procedure(context: *mut c_void) -> u8 {
     let data: *mut DaemonData = transmute(context);
 
-    dispatcher::run(main(&mut *data))
+    kami::block_on(create_dispatcher(), main(&mut *data));
+
+    SUCCESS
 }
 
 struct DaemonData {
@@ -133,5 +144,6 @@ struct DaemonData {
 type DaemonProcedure = unsafe extern "C" fn(*mut c_void) -> u8;
 
 extern "C" {
+    fn is_shutdown_requested() -> c_int;
     fn enter_daemon(log: *const c_char, daemon: DaemonProcedure, context: *mut c_void) -> u8;
 }
