@@ -1,4 +1,4 @@
-use crate::ffi::{kami_pselect_dispatch, kami_pselect_init, kami_pselect_watch_accept};
+use crate::ffi::{kami_pselect_dispatch, kami_pselect_init, kami_pselect_watch_read};
 use crate::state::Socket;
 use crate::Dispatcher;
 use std::ffi::c_void;
@@ -44,7 +44,15 @@ impl Pselect {
 
 impl Dispatcher for Pselect {
     fn watch_for_accept(&mut self, socket: Socket) {
-        unsafe { kami_pselect_watch_accept(socket) };
+        unsafe { kami_pselect_watch_read(socket) };
+    }
+
+    fn watch_for_read(&mut self, socket: Socket) {
+        unsafe { kami_pselect_watch_read(socket) };
+    }
+
+    fn watch_for_write(&mut self, socket: Socket) {
+        unsafe { crate::ffi::kami_pselect_watch_write(socket) };
     }
 
     fn run<H: FnMut(Socket)>(&mut self, handler: H) -> bool

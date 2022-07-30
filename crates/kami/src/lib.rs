@@ -1,9 +1,9 @@
-use self::futures::Accepting;
+use self::futures::{Accepting, Reading, Writing};
 use self::state::{Socket, DISPATCHER, WAKERS};
 use std::collections::{HashMap, LinkedList};
 use std::future::Future;
 use std::mem::transmute;
-use std::net::TcpListener;
+use std::net::{TcpListener, TcpStream};
 use std::pin::Pin;
 use std::ptr::null_mut;
 use std::rc::Rc;
@@ -24,6 +24,18 @@ mod state;
 /// [`block_on`]) otherwise it will panic.
 pub fn accept<'a>(listener: &'a TcpListener) -> Accepting<'a> {
     Accepting::new(listener)
+}
+
+/// Asynchronous version of [`TcpStream::read`]. The `stream` **MUST** be in non-blocking mode
+/// otherwise the call to this function will be block.
+pub fn read<'a, 'b>(stream: &'a mut TcpStream, buf: &'b mut [u8]) -> Reading<'a, 'b> {
+    Reading::new(stream, buf)
+}
+
+/// Asynchronous version of [`TcpStream::write`]. The `stream` **MUST** be in non-blocking mode
+/// otherwise the call to this function may block.
+pub fn write<'a, 'b>(stream: &'a mut TcpStream, buf: &'b [u8]) -> Writing<'a, 'b> {
+    Writing::new(stream, buf)
 }
 
 /// Start a new [`Future`] to run concurrently with the other [`Future`].
@@ -111,6 +123,8 @@ where
 /// Represents the dispatcher to dispatch the I/O events.
 pub trait Dispatcher {
     fn watch_for_accept(&mut self, socket: Socket);
+    fn watch_for_read(&mut self, socket: Socket);
+    fn watch_for_write(&mut self, socket: Socket);
 
     fn run<H: FnMut(Socket)>(&mut self, handler: H) -> bool
     where

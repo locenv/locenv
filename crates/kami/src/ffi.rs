@@ -12,7 +12,8 @@ pub struct DispatchHandlers {
 #[cfg(target_family = "unix")]
 extern "C" {
     pub fn kami_pselect_init() -> c_int;
-    pub fn kami_pselect_watch_accept(socket: Socket);
+    pub fn kami_pselect_watch_read(socket: Socket);
+    pub fn kami_pselect_watch_write(socket: Socket);
     pub fn kami_pselect_dispatch(
         signals: *const c_int,
         signals_count: c_int,
@@ -25,6 +26,8 @@ extern "C" {
 extern "C" {
     pub fn kami_winsock_event_init() -> c_int;
     pub fn kami_winsock_event_watch_accept(socket: Socket) -> c_int;
+    pub fn kami_winsock_event_watch_read(socket: Socket) -> c_int;
+    pub fn kami_winsock_event_watch_write(socket: Socket) -> c_int;
     pub fn kami_winsock_event_dispatch(
         handler: unsafe extern "C" fn(Socket, *mut c_void),
         context: *mut c_void,

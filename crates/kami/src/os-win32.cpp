@@ -38,6 +38,52 @@ extern "C" int kami_winsock_event_watch_accept(SOCKET socket)
     return 0;
 }
 
+extern "C" int kami_winsock_event_watch_read(SOCKET socket)
+{
+    if (total == WSA_MAXIMUM_WAIT_EVENTS) {
+        return 1;
+    }
+
+    auto event = WSACreateEvent();
+
+    if (event == WSA_INVALID_EVENT) {
+        return -WSAGetLastError();
+    }
+
+    if (WSAEventSelect(socket, event, FD_READ) == SOCKET_ERROR) {
+        return -WSAGetLastError();
+    }
+
+    sockets[total] = socket;
+    events[total] = event;
+    total++;
+
+    return 0;
+}
+
+extern "C" int kami_winsock_event_watch_write(SOCKET socket)
+{
+    if (total == WSA_MAXIMUM_WAIT_EVENTS) {
+        return 1;
+    }
+
+    auto event = WSACreateEvent();
+
+    if (event == WSA_INVALID_EVENT) {
+        return -WSAGetLastError();
+    }
+
+    if (WSAEventSelect(socket, event, FD_WRITE) == SOCKET_ERROR) {
+        return -WSAGetLastError();
+    }
+
+    sockets[total] = socket;
+    events[total] = event;
+    total++;
+
+    return 0;
+}
+
 extern "C" int kami_winsock_event_dispatch(void (*handler) (SOCKET, void *), void *context)
 {
     if (!total) {

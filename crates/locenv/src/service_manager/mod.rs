@@ -1,3 +1,5 @@
+use self::api::{NotFound, Request};
+use self::client::Client;
 use crate::SUCCESS;
 use context::Context;
 use dirtree::TempFile;
@@ -11,8 +13,7 @@ use std::path::PathBuf;
 pub const START_RPC_SERVER_FAILED: u8 = 253;
 pub const INITIALIZATION_FAILED: u8 = 254;
 
-pub mod requests;
-pub mod responses;
+pub mod api;
 
 mod client;
 
@@ -100,7 +101,40 @@ async fn main(data: &mut DaemonData) {
                 continue;
             }
         };
+
+        client.set_nonblocking(true).unwrap();
+
+        kami::spawn(handle_client(Client::new(client), from));
     }
+}
+
+async fn handle_client(mut client: Client, address: SocketAddr) {
+    // Get the request.
+    let http = match client.receive().await {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("Failed to read a request from {}: {}", address, e);
+            return;
+        }
+    };
+
+    let headers = http.headers();
+    let body = http.body();
+
+    // Route the request.
+    let request_line = headers.request_line();
+    let request = match Request::resolve(request_line.method(), request_line.target().path()) {
+        Some(r) => r,
+        None => {
+            drop(http);
+
+            if let Err(e) = client.send(NotFound {}).await {
+                eprintln!("Failed to response 404 to {}: {}", address, e);
+            }
+
+            return;
+        }
+    };
 }
 
 fn daemon(log: PathBuf, mut data: DaemonData) -> u8 {

@@ -1,65 +1,76 @@
-use self::state::{HeaderError, State};
-use super::requests::Request;
-use super::responses::Response;
+pub use self::header::{Headers, RequestLine};
+
+use self::header::HeaderError;
+use super::api::Response;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::mem::MaybeUninit;
+use std::net::TcpStream;
+use std::vec::Drain;
 
-mod state;
+mod header;
 
 /// Represents a client for the Service Manager.
-pub struct Client<C: Read + Write> {
-    connection: C,
-    buffer: Vec<u8>,
-    state: State,
+pub struct Client {
+    connection: TcpStream,
+    receive_buffer: Vec<u8>,
+    headers: Headers,
 }
 
-impl<C: Read + Write> Client<C> {
-    pub(super) fn new(connection: C) -> Self {
+impl Client {
+    pub fn new(connection: TcpStream) -> Self {
         Self {
             connection,
-            buffer: Vec::new(),
-            state: State::new(),
+            receive_buffer: Vec::new(),
+            headers: Headers::new(),
         }
     }
 
-    pub fn receive(&mut self) -> Result<RequestData, ReceiveError> {
+    pub async fn receive<'a>(&'a mut self) -> Result<Request<'a>, ReceiveError> {
         let mut buffer: [u8; 8192] = unsafe { MaybeUninit::uninit().assume_init() };
 
         'read_data: loop {
             // Read some data from connection.
-            let count = self
-                .connection
-                .read(&mut buffer)
-                .map_err(|e| ReceiveError::ReadFailed(e))?;
+            let count = match kami::read(&mut self.connection, &mut buffer).await {
+                Ok(r) => r,
+                Err(e) => return Err(ReceiveError::ReadFailed(e)),
+            };
 
             if count == 0 {
                 return Err(ReceiveError::EndOfFile);
             }
 
-            self.buffer.extend_from_slice(&buffer[..count]);
+            self.receive_buffer.extend_from_slice(&buffer[..count]);
 
-            // Process buffer.
-            if !self.state.is_body() {
+            // Read headers.
+            if !self.headers.is_complete() {
                 loop {
                     if !self.decode_header()? {
                         continue 'read_data;
-                    } else if self.state.is_body() {
+                    } else if self.headers.is_complete() {
                         break;
                     }
                 }
             }
 
-            if self.buffer.len() < self.state.content_length() {
+            // Get body.
+            let content_length = self.headers.content_length().unwrap_or(0);
+
+            if self.receive_buffer.len() < content_length {
                 continue;
             }
 
-            return self.decode_body();
+            let request = Request {
+                headers: &mut self.headers,
+                body: self.receive_buffer.drain(..content_length),
+            };
+
+            break Ok(request);
         }
     }
 
-    pub fn send<R: Response>(&mut self, response: R) -> Result<(), SendError> {
+    pub async fn send<R: Response>(&mut self, response: R) -> Result<(), SendError> {
         let body = serde_json::to_vec(&response).unwrap();
         let mut data: Vec<u8> = Vec::new();
 
@@ -76,10 +87,10 @@ impl<C: Read + Write> Client<C> {
         let mut total: usize = 0;
 
         while total < data.len() {
-            let written = match self.connection.write(&data[total..]) {
+            let written = match kami::write(&mut self.connection, &data[total..]).await {
                 Ok(r) => r,
                 Err(e) => match e.kind() {
-                    std::io::ErrorKind::Interrupted | std::io::ErrorKind::WouldBlock => continue,
+                    std::io::ErrorKind::Interrupted => continue,
                     _ => return Err(SendError::WriteFailed(e)),
                 },
             };
@@ -91,26 +102,14 @@ impl<C: Read + Write> Client<C> {
             total += written;
         }
 
-        // Flush written data.
-        loop {
-            if let Err(e) = self.connection.flush() {
-                match e.kind() {
-                    std::io::ErrorKind::Interrupted | std::io::ErrorKind::WouldBlock => continue,
-                    _ => return Err(SendError::WriteFailed(e)),
-                }
-            }
-
-            break;
-        }
-
         Ok(())
     }
 
     fn decode_header(&mut self) -> Result<bool, ReceiveError> {
         // Get header line.
-        for i in 0..self.buffer.len() {
+        for i in 0..self.receive_buffer.len() {
             // Find '\r\n'.
-            let remaining = &self.buffer[i..self.buffer.len()];
+            let remaining = &self.receive_buffer[i..self.receive_buffer.len()];
 
             if remaining.len() < 2 {
                 return Ok(false);
@@ -121,56 +120,54 @@ impl<C: Read + Write> Client<C> {
             }
 
             // Extract header line.
-            let line = match std::str::from_utf8(&self.buffer[0..i]) {
+            let line = match std::str::from_utf8(&self.receive_buffer[..i]) {
                 Ok(r) => r,
                 Err(_) => return Err(ReceiveError::NotHttp),
             };
 
             // Parse header.
-            if let Err(e) = self.state.parse_header(line) {
+            if let Err(e) = self.headers.parse(line) {
                 return Err(match e {
                     HeaderError::Invalid => ReceiveError::NotHttp,
-                    HeaderError::MethodNotSupported(method) => {
-                        ReceiveError::MethodNotSupported(method)
+                    HeaderError::MethodNotSupported(m) => {
+                        ReceiveError::MethodNotSupported(m.into())
                     }
-                    HeaderError::TargetNotSupported(target) => {
-                        ReceiveError::TargetNotSupported(target)
+                    HeaderError::TargetNotSupported(t) => {
+                        ReceiveError::TargetNotSupported(t.into())
                     }
-                    HeaderError::NotFound(_) => ReceiveError::UnknowRequest,
                 });
             }
 
             // Remove processed data.
-            self.buffer.drain(0..(i + 2));
+            self.receive_buffer.drain(0..(i + 2));
 
             return Ok(true);
         }
 
         Ok(false)
     }
+}
 
-    fn decode_body(&mut self) -> Result<RequestData, ReceiveError> {
-        // Extract data.
-        let (request, content_length) = self.state.complete();
-        let body = self.buffer.drain(..content_length);
-        let data = body.as_slice();
+/// Represents an HTTP request from client.
+pub struct Request<'client> {
+    headers: &'client mut Headers,
+    body: Drain<'client, u8>,
+}
 
-        match request {
-            Request::GetStatus => {
-                if data.is_empty() {
-                    Ok(RequestData::GetStatus)
-                } else {
-                    Err(ReceiveError::InvalidRequest)
-                }
-            }
-        }
+impl<'client> Request<'client> {
+    pub fn headers(&self) -> &Headers {
+        self.headers
+    }
+
+    pub fn body(&self) -> &[u8] {
+        self.body.as_slice()
     }
 }
 
-/// Represents a request from the client.
-#[derive(Debug)]
-pub enum RequestData {
-    GetStatus,
+impl<'client> Drop for Request<'client> {
+    fn drop(&mut self) {
+        self.headers.clear();
+    }
 }
 
 /// Represents an error when reading a request from the client.
@@ -181,8 +178,6 @@ pub enum ReceiveError {
     NotHttp,
     MethodNotSupported(String),
     TargetNotSupported(String),
-    UnknowRequest,
-    InvalidRequest,
 }
 
 impl Error for ReceiveError {
@@ -197,13 +192,11 @@ impl Error for ReceiveError {
 impl Display for ReceiveError {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            Self::ReadFailed(_) => f.write_str("failed to read data"),
+            Self::ReadFailed(_) => f.write_str("read failed"),
             Self::EndOfFile => f.write_str("end of file has been reached"),
             Self::NotHttp => f.write_str("the request is not a valid HTTP"),
             Self::MethodNotSupported(name) => write!(f, "method '{}' is not supported", name),
             Self::TargetNotSupported(target) => write!(f, "target '{}' is not supported", target),
-            Self::UnknowRequest => f.write_str("unknow request"),
-            Self::InvalidRequest => f.write_str("invalid request"),
         }
     }
 }
@@ -227,7 +220,7 @@ impl Error for SendError {
 impl Display for SendError {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            Self::WriteFailed(_) => f.write_str("failed to write data"),
+            Self::WriteFailed(_) => f.write_str("write failed"),
             Self::EndOfFile => f.write_str("end of file has been reached"),
         }
     }

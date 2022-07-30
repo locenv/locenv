@@ -1,5 +1,6 @@
 use crate::ffi::{
     kami_winsock_event_dispatch, kami_winsock_event_init, kami_winsock_event_watch_accept,
+    kami_winsock_event_watch_read, kami_winsock_event_watch_write,
 };
 use crate::state::Socket;
 use crate::Dispatcher;
@@ -42,21 +43,61 @@ impl WinsockEvent {
 
 impl Dispatcher for WinsockEvent {
     fn watch_for_accept(&mut self, socket: Socket) {
-        let result = unsafe { kami_winsock_event_watch_accept(socket) };
+        let r = unsafe { kami_winsock_event_watch_accept(socket) };
 
-        if result < 0 {
+        if r < 0 {
             panic!(
                 "Winsock error while trying to listen for accept notification ({})",
-                result.abs()
+                r.abs()
             );
         }
 
-        match result {
+        match r {
             0 => {}
             1 => panic!("Maximum number of sockets has been reached"),
             _ => panic!(
                 "Got an unexpected result from kami_winsock_event_watch_accept: {}",
-                result
+                r
+            ),
+        }
+    }
+
+    fn watch_for_read(&mut self, socket: Socket) {
+        let r = unsafe { kami_winsock_event_watch_read(socket) };
+
+        if r < 0 {
+            panic!(
+                "Winsock error while trying to listen for read notification ({})",
+                r.abs()
+            );
+        }
+
+        match r {
+            0 => {}
+            1 => panic!("Maximum number of sockets has been reached"),
+            _ => panic!(
+                "Got an unexpected result from kami_winsock_event_watch_read: {}",
+                r
+            ),
+        }
+    }
+
+    fn watch_for_write(&mut self, socket: Socket) {
+        let r = unsafe { kami_winsock_event_watch_write(socket) };
+
+        if r < 0 {
+            panic!(
+                "Winsock error while trying to listen for write notification ({})",
+                r.abs()
+            );
+        }
+
+        match r {
+            0 => {}
+            1 => panic!("Maximum number of sockets has been reached"),
+            _ => panic!(
+                "Got an unexpected result from kami_winsock_event_watch_write: {}",
+                r
             ),
         }
     }
