@@ -1,4 +1,4 @@
-use crate::state::{Socket, DISPATCHER, WAKERS};
+use crate::state::{PendingData, Socket, DISPATCHER, PENDING};
 use crate::Dispatcher;
 use std::future::Future;
 use std::io::{Read, Write};
@@ -12,11 +12,22 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 /// Represents a [`Future`] for asynchronous [`TcpListener::accept()`].
-pub struct Accepting<'a>(&'a TcpListener);
+pub struct Accepting<'a> {
+    listener: &'a TcpListener,
+    cancelable: bool,
+}
 
 impl<'a> Accepting<'a> {
     pub(crate) fn new(listener: &'a TcpListener) -> Self {
-        Self(listener)
+        Self {
+            listener,
+            cancelable: true,
+        }
+    }
+
+    pub fn cancelable(&mut self, v: bool) -> &mut Self {
+        self.cancelable = v;
+        self
     }
 }
 
@@ -25,7 +36,7 @@ impl<'a> Future for Accepting<'a> {
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         // Accept the connection.
-        match self.0.accept() {
+        match self.listener.accept() {
             Ok(r) => return Poll::Ready(Ok(r)),
             Err(e) => {
                 if e.kind() != std::io::ErrorKind::WouldBlock {
@@ -35,9 +46,9 @@ impl<'a> Future for Accepting<'a> {
         }
 
         // Register for accept notification.
-        let socket = get_underlying_socket(self.0);
+        let socket = get_underlying_socket(self.listener);
 
-        register_waker(cx, socket);
+        register_pending(cx, socket, self.cancelable);
         get_dispatcher().watch_for_accept(socket);
 
         Poll::Pending
@@ -48,11 +59,21 @@ impl<'a> Future for Accepting<'a> {
 pub struct Reading<'stream, 'buffer> {
     stream: &'stream mut TcpStream,
     buffer: &'buffer mut [u8],
+    cancelable: bool,
 }
 
 impl<'stream, 'buffer> Reading<'stream, 'buffer> {
     pub(crate) fn new(stream: &'stream mut TcpStream, buffer: &'buffer mut [u8]) -> Self {
-        Self { stream, buffer }
+        Self {
+            stream,
+            buffer,
+            cancelable: true,
+        }
+    }
+
+    pub fn cancelable(&mut self, v: bool) -> &mut Self {
+        self.cancelable = v;
+        self
     }
 }
 
@@ -75,7 +96,7 @@ impl<'stream, 'buffer> Future for Reading<'stream, 'buffer> {
         // Register for read notification.
         let socket = get_underlying_socket(f.stream);
 
-        register_waker(cx, socket);
+        register_pending(cx, socket, self.cancelable);
         get_dispatcher().watch_for_read(socket);
 
         Poll::Pending
@@ -86,11 +107,21 @@ impl<'stream, 'buffer> Future for Reading<'stream, 'buffer> {
 pub struct Writing<'stream, 'data> {
     stream: &'stream mut TcpStream,
     data: &'data [u8],
+    cancelable: bool,
 }
 
 impl<'stream, 'data> Writing<'stream, 'data> {
     pub(crate) fn new(stream: &'stream mut TcpStream, data: &'data [u8]) -> Self {
-        Self { stream, data }
+        Self {
+            stream,
+            data,
+            cancelable: false,
+        }
+    }
+
+    pub fn cancelable(&mut self, v: bool) -> &mut Self {
+        self.cancelable = v;
+        self
     }
 }
 
@@ -113,7 +144,7 @@ impl<'stream, 'data> Future for Writing<'stream, 'data> {
         // Register for write notification.
         let socket = get_underlying_socket(f.stream);
 
-        register_waker(cx, socket);
+        register_pending(cx, socket, self.cancelable);
         get_dispatcher().watch_for_write(socket);
 
         Poll::Pending
@@ -130,8 +161,13 @@ fn get_underlying_socket<O: AsRawSocket>(object: &O) -> std::os::windows::io::Ra
     object.as_raw_socket()
 }
 
-fn register_waker(context: &Context, socket: Socket) {
-    if let Some(_) = unsafe { (*WAKERS).insert(socket, context.waker().clone()) } {
+fn register_pending(context: &Context, socket: Socket, cancelable: bool) {
+    let data = PendingData {
+        waker: context.waker().clone(),
+        cancelable,
+    };
+
+    if unsafe { (*PENDING).insert(socket, data).is_some() } {
         panic!("This future cannot be polling while other futures still in-progress");
     }
 }

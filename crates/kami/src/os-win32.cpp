@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include <winsock2.h>
 
 static DWORD total = (DWORD)-1;
@@ -82,6 +84,27 @@ extern "C" int kami_winsock_event_watch_write(SOCKET socket)
     total++;
 
     return 0;
+}
+
+extern "C" int kami_winsock_event_watch_remove(SOCKET socket)
+{
+    for (DWORD i = 0; i < total; i++) {
+        if (sockets[i] == socket) {
+            if (WSAEventSelect(sockets[i], events[i], 0) == SOCKET_ERROR) {
+                return -WSAGetLastError();
+            }
+
+            WSACloseEvent(events[i]);
+
+            total--;
+            memmove(&sockets[i], &sockets[i + 1], (total - i) * sizeof(SOCKET));
+            memmove(&events[i], &events[i + 1], (total - i) * sizeof(WSAEVENT));
+
+            return 0;
+        }
+    }
+
+    return 1;
 }
 
 extern "C" int kami_winsock_event_dispatch(void (*handler) (SOCKET, void *), void *context)

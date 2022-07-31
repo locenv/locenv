@@ -1,5 +1,5 @@
 use self::futures::{Accepting, Reading, Writing};
-use self::state::{Socket, DISPATCHER, WAKERS};
+use self::state::{PendingData, Socket, DISPATCHER, PENDING};
 use std::collections::{HashMap, LinkedList};
 use std::future::Future;
 use std::mem::transmute;
@@ -62,10 +62,15 @@ pub fn spawn(task: impl Future<Output = ()> + 'static) {
     unsafe { (*READY).push_back(task) };
 }
 
+/// Trigger graceful shutdown. This function will return immediately.
+pub fn shutdown() {
+    unsafe { SHUTDOWN = true };
+}
+
 /// Block the current thread until all futures is completed.
 ///
-/// Returns a value indicated whether all futures is running to completion or the `dispatcher` want
-/// to stop.
+/// Returns a value indicated whether all futures is running to completion or shutdown has been
+/// triggered by either `dispatcher` or [`shutdown`].
 ///
 /// # Panics
 ///
@@ -76,10 +81,9 @@ where
     T: Future<Output = ()> + 'static,
 {
     let mut dispatcher = Box::new(dispatcher);
-    let task = Box::pin(task);
 
     // Initialize global tables.
-    let mut wakers: HashMap<Socket, Waker> = HashMap::new();
+    let mut pending: HashMap<Socket, PendingData> = HashMap::new();
     let mut ready: LinkedList<Pin<Box<dyn Future<Output = ()>>>> = LinkedList::new();
 
     unsafe {
@@ -89,34 +93,66 @@ where
 
         DISPATCHER = Some(transmute(&*dispatcher as &dyn Dispatcher));
         READY = transmute(&ready);
-        WAKERS = transmute(&wakers);
+        PENDING = transmute(&pending);
     }
 
     // Enter event dispatching loop.
-    ready.push_back(task);
+    ready.push_back(Box::pin(task));
 
-    loop {
+    let result = loop {
         // Poll all tasks that are ready.
-        while let Some(t) = ready.pop_front() {
-            let data = Rc::new(WakerData { task: Some(t) });
-            let data = Rc::into_raw(data) as *mut WakerData;
-            let waker = unsafe { Waker::from_raw(RawWaker::new(transmute(data), &RAW_WAKER)) };
-            let mut context = Context::from_waker(&waker);
+        poll_all(&mut ready);
 
-            // #[allow(unused_must_use)] does not work somehow...
-            let _ = unsafe { (*data).task.as_mut().unwrap().as_mut().poll(&mut context) };
-        }
-
-        // Check if no pending tasks.
-        if wakers.is_empty() {
+        // Shoud we stop the event loop?
+        if pending.is_empty() {
             break true;
+        } else if unsafe { SHUTDOWN } {
+            break false;
         }
 
         // Wait for events.
-        if !dispatcher.run(|s| wakers.remove(&s).unwrap().wake()) {
-            assert!(ready.is_empty());
+        if !dispatcher.run(|s| pending.remove(&s).unwrap().waker.wake()) {
             break false;
         }
+    };
+
+    assert!(ready.is_empty());
+
+    // Wait all non-cancelable futures.
+    while !pending.is_empty() {
+        // Remove all cancelable tasks from the above loop and newly added by the end of this loop
+        // so we don't end up running this as a main loop.
+        pending.retain(|s, d| {
+            if d.cancelable {
+                dispatcher.remove_watch(*s);
+                false
+            } else {
+                true
+            }
+        });
+
+        if pending.is_empty() {
+            break;
+        }
+
+        // Wait some of non-cancelable to be ready and poll it.
+        dispatcher.run(|s| pending.remove(&s).unwrap().waker.wake());
+
+        poll_all(&mut ready);
+    }
+
+    result
+}
+
+fn poll_all(tasks: &mut LinkedList<Pin<Box<dyn Future<Output = ()>>>>) {
+    while let Some(t) = tasks.pop_front() {
+        let data = Rc::new(WakerData { task: Some(t) });
+        let data = Rc::into_raw(data) as *mut WakerData;
+        let waker = unsafe { Waker::from_raw(RawWaker::new(transmute(data), &RAW_WAKER)) };
+        let mut context = Context::from_waker(&waker);
+
+        // #[allow(unused_must_use)] does not work somehow...
+        let _ = unsafe { (*data).task.as_mut().unwrap().as_mut().poll(&mut context) };
     }
 }
 
@@ -125,6 +161,7 @@ pub trait Dispatcher {
     fn watch_for_accept(&mut self, socket: Socket);
     fn watch_for_read(&mut self, socket: Socket);
     fn watch_for_write(&mut self, socket: Socket);
+    fn remove_watch(&mut self, socket: Socket);
 
     fn run<H: FnMut(Socket)>(&mut self, handler: H) -> bool
     where
@@ -136,6 +173,7 @@ struct WakerData {
 }
 
 static mut READY: *mut LinkedList<Pin<Box<dyn Future<Output = ()>>>> = null_mut();
+static mut SHUTDOWN: bool = false;
 
 const RAW_WAKER: RawWakerVTable =
     RawWakerVTable::new(waker_clone, waker_wake, waker_wake_ref, waker_drop);

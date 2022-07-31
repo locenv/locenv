@@ -45,6 +45,24 @@ extern "C" void kami_pselect_watch_write(int fd)
     FD_SET(fd, &writefds);
 }
 
+extern "C" void kami_pselect_watch_remove(int fd)
+{
+    int max = max_fd - 1;
+
+    if (fd == max) {
+        for (; max >= 0; max--) {
+            if (FD_ISSET(max, &readfds) || FD_ISSET(max, &writefds)) {
+                break;
+            }
+        }
+
+        max_fd = max + 1;
+    }
+
+    FD_CLR(fd, &readfds);
+    FD_CLR(fd, &writefds);
+}
+
 extern "C" int kami_pselect_dispatch(const int *signals, int signals_count, const dispatch_handlers *handlers, void *context)
 {
     if (!max_fd) {

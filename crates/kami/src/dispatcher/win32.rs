@@ -1,6 +1,6 @@
 use crate::ffi::{
     kami_winsock_event_dispatch, kami_winsock_event_init, kami_winsock_event_watch_accept,
-    kami_winsock_event_watch_read, kami_winsock_event_watch_write,
+    kami_winsock_event_watch_read, kami_winsock_event_watch_remove, kami_winsock_event_watch_write,
 };
 use crate::state::Socket;
 use crate::Dispatcher;
@@ -97,6 +97,25 @@ impl Dispatcher for WinsockEvent {
             1 => panic!("Maximum number of sockets has been reached"),
             _ => panic!(
                 "Got an unexpected result from kami_winsock_event_watch_write: {}",
+                r
+            ),
+        }
+    }
+
+    fn remove_watch(&mut self, socket: Socket) {
+        let r = unsafe { kami_winsock_event_watch_remove(socket) };
+
+        if r < 0 {
+            panic!(
+                "Winsock error while trying to stop listening for notification ({})",
+                r.abs()
+            );
+        }
+
+        match r {
+            0 | 1 => {}
+            _ => panic!(
+                "Got an unexpected result from kami_winsock_event_watch_remove: {}",
                 r
             ),
         }

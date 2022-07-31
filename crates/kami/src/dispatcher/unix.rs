@@ -55,6 +55,10 @@ impl Dispatcher for Pselect {
         unsafe { crate::ffi::kami_pselect_watch_write(socket) };
     }
 
+    fn remove_watch(&mut self, socket: Socket) {
+        unsafe { crate::ffi::kami_pselect_watch_remove(socket) };
+    }
+
     fn run<H: FnMut(Socket)>(&mut self, handler: H) -> bool
     where
         Self: Sized,

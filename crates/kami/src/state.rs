@@ -9,4 +9,9 @@ pub type Socket = std::os::unix::io::RawFd;
 pub type Socket = std::os::windows::io::RawSocket;
 
 pub static mut DISPATCHER: Option<*mut dyn Dispatcher> = None;
-pub static mut WAKERS: *mut HashMap<Socket, Waker> = null_mut();
+pub static mut PENDING: *mut HashMap<Socket, PendingData> = null_mut();
+
+pub struct PendingData {
+    pub waker: Waker,
+    pub cancelable: bool,
+}
