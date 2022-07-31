@@ -1,4 +1,4 @@
-use self::api::{NotFound, Request};
+use self::api::{Accepted, BadRequest, NotFound, Request, ServiceManagerStatus};
 use self::client::Client;
 use crate::SUCCESS;
 use context::Context;
@@ -104,12 +104,30 @@ async fn main(data: &mut DaemonData) {
 
         client.set_nonblocking(true).unwrap();
 
-        kami::spawn(handle_client(Client::new(client), from));
+        kami::spawn(handle_client(Client::new(client, from)));
     }
 }
 
-async fn handle_client(mut client: Client, address: SocketAddr) {
+macro_rules! h {
+    ($f:ident($c:ident, $h:ident => $b:ty)) => {{
+        let body = match serde_json::from_slice::<$b>($h.body()) {
+            Ok(r) => r,
+            Err(_) => {
+                drop($h);
+                $c.send(BadRequest).await;
+                return;
+            }
+        };
+
+        drop($h);
+
+        $f(&mut $c, body).await
+    }};
+}
+
+async fn handle_client(mut client: Client) {
     // Get the request.
+    let address = client.address().clone(); // We cannot borrow client somehow in the match arm.
     let http = match client.receive().await {
         Ok(r) => r,
         Err(e) => {
@@ -119,7 +137,6 @@ async fn handle_client(mut client: Client, address: SocketAddr) {
     };
 
     let headers = http.headers();
-    let body = http.body();
 
     // Route the request.
     let request_line = headers.request_line();
@@ -127,14 +144,24 @@ async fn handle_client(mut client: Client, address: SocketAddr) {
         Some(r) => r,
         None => {
             drop(http);
-
-            if let Err(e) = client.send(NotFound {}).await {
-                eprintln!("Failed to response 404 to {}: {}", address, e);
-            }
-
+            client.send(NotFound).await;
             return;
         }
     };
+
+    match request {
+        Request::SetStatus => h! { set_status(client, http => ServiceManagerStatus) },
+    }
+}
+
+async fn set_status(client: &mut Client, body: ServiceManagerStatus) {
+    match body {
+        ServiceManagerStatus::Running => client.send(BadRequest).await,
+        ServiceManagerStatus::Stopping => {
+            kami::shutdown();
+            client.send(Accepted).await;
+        }
+    }
 }
 
 fn daemon(log: PathBuf, mut data: DaemonData) -> u8 {

@@ -6,7 +6,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::io::Write;
 use std::mem::MaybeUninit;
-use std::net::TcpStream;
+use std::net::{SocketAddr, TcpStream};
 use std::vec::Drain;
 
 mod header;
@@ -14,17 +14,23 @@ mod header;
 /// Represents a client for the Service Manager.
 pub struct Client {
     connection: TcpStream,
+    address: SocketAddr,
     receive_buffer: Vec<u8>,
     headers: Headers,
 }
 
 impl Client {
-    pub fn new(connection: TcpStream) -> Self {
+    pub fn new(connection: TcpStream, address: SocketAddr) -> Self {
         Self {
             connection,
+            address,
             receive_buffer: Vec::new(),
             headers: Headers::new(),
         }
+    }
+
+    pub fn address(&self) -> &SocketAddr {
+        &self.address
     }
 
     pub async fn receive<'a>(&'a mut self) -> Result<Request<'a>, ReceiveError> {
@@ -70,9 +76,13 @@ impl Client {
         }
     }
 
-    pub async fn send<R: Response>(&mut self, response: R) -> Result<(), SendError> {
-        let body = serde_json::to_vec(&response).unwrap();
+    pub async fn send<R: Response>(&mut self, response: R) {
         let mut data: Vec<u8> = Vec::new();
+        let body = if response.has_body() {
+            serde_json::to_vec(&response).unwrap()
+        } else {
+            Vec::new()
+        };
 
         // Write headers.
         write!(data, "HTTP/1.1 {}\r\n", response.status_code()).unwrap();
@@ -91,18 +101,29 @@ impl Client {
                 Ok(r) => r,
                 Err(e) => match e.kind() {
                     std::io::ErrorKind::Interrupted => continue,
-                    _ => return Err(SendError::WriteFailed(e)),
+                    _ => {
+                        eprintln!(
+                            "Failed to response {} to {}: {}",
+                            response.status_code(),
+                            self.address,
+                            e
+                        );
+                        return;
+                    }
                 },
             };
 
             if written == 0 {
-                return Err(SendError::EndOfFile);
+                eprintln!(
+                    "Failed to response {} to {}: end of file has been reached",
+                    response.status_code(),
+                    self.address
+                );
+                return;
             }
 
             total += written;
         }
-
-        Ok(())
     }
 
     fn decode_header(&mut self) -> Result<bool, ReceiveError> {
@@ -197,31 +218,6 @@ impl Display for ReceiveError {
             Self::NotHttp => f.write_str("the request is not a valid HTTP"),
             Self::MethodNotSupported(name) => write!(f, "method '{}' is not supported", name),
             Self::TargetNotSupported(target) => write!(f, "target '{}' is not supported", target),
-        }
-    }
-}
-
-/// Represents an error when sending response back to the client failed.
-#[derive(Debug)]
-pub enum SendError {
-    WriteFailed(std::io::Error),
-    EndOfFile,
-}
-
-impl Error for SendError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            Self::WriteFailed(e) => Some(e),
-            _ => None,
-        }
-    }
-}
-
-impl Display for SendError {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            Self::WriteFailed(_) => f.write_str("write failed"),
-            Self::EndOfFile => f.write_str("end of file has been reached"),
         }
     }
 }
