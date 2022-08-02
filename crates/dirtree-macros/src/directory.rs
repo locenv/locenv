@@ -1,4 +1,4 @@
-use quote::__private::TokenStream;
+use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::punctuated::Punctuated;
 use syn::{
@@ -45,7 +45,7 @@ impl<'input> DirectoryParser<'input> {
         let name = field.ident.as_ref().unwrap();
 
         // Parse attributes.
-        let mut r#type: Option<FieldType> = None;
+        let mut ty: Option<FieldType> = None;
 
         for attr in &field.attrs {
             let meta = match attr.parse_meta() {
@@ -53,21 +53,21 @@ impl<'input> DirectoryParser<'input> {
                 Err(_) => continue,
             };
 
-            r#type = FieldType::parse(&meta);
+            ty = FieldType::parse(&meta);
 
-            if r#type.is_some() {
+            if ty.is_some() {
                 break;
             }
         }
 
         // Check type.
-        let r#type = if let Some(v) = r#type {
+        let ty = if let Some(v) = ty {
             v
         } else {
             return;
         };
 
-        match r#type {
+        match ty {
             FieldType::File(data) => self.parse_file(name, &field.ty, &data),
             FieldType::Directory(data) => self.parse_directory(name, &field.ty, &data),
             FieldType::Placeholder(data) => self.parse_placeholder(name, &data),
@@ -252,24 +252,24 @@ enum FieldType {
 
 impl FieldType {
     fn parse(attr: &Meta) -> Option<Self> {
-        let r#type = match attr {
+        let ty = match attr {
             Meta::Path(p) => {
-                if p.is_ident("file") {
+                if Self::is_file(p) {
                     Self::File(File::default())
-                } else if p.is_ident("directory") {
+                } else if Self::is_directory(p) {
                     Self::Directory(Directory::default())
-                } else if p.is_ident("placeholder") {
+                } else if Self::is_placeholder(p) {
                     Self::Placeholder(Placeholder::default())
                 } else {
                     return None;
                 }
             }
             Meta::List(l) => {
-                if l.path.is_ident("file") {
+                if Self::is_file(&l.path) {
                     Self::File(File::parse(l))
-                } else if l.path.is_ident("directory") {
+                } else if Self::is_directory(&l.path) {
                     Self::Directory(Directory::parse(l))
-                } else if l.path.is_ident("placeholder") {
+                } else if Self::is_placeholder(&l.path) {
                     Self::Placeholder(Placeholder::parse(l))
                 } else {
                     return None;
@@ -278,7 +278,19 @@ impl FieldType {
             _ => return None,
         };
 
-        Some(r#type)
+        Some(ty)
+    }
+
+    fn is_file(p: &Path) -> bool {
+        p.is_ident("file")
+    }
+
+    fn is_directory(p: &Path) -> bool {
+        p.is_ident("directory")
+    }
+
+    fn is_placeholder(p: &Path) -> bool {
+        p.is_ident("placeholder")
     }
 }
 
