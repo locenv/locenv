@@ -28,10 +28,13 @@ pub fn execute<E: Endpoint>(endpoint: E) -> Result<E::Output, E::Err> {
         });
     }
 
+    let handler = client.get_mut();
+    let status = handler.take_status();
+
     drop(client);
 
     // Get output.
-    endpoint.into_inner().build_output()
+    endpoint.into_inner().build_output(status)
 }
 
 fn setup_curl<H, E>(client: &mut ::curl::easy::Easy2<H>, endpoint: &E)
@@ -84,12 +87,14 @@ where
 
     fn override_request_headers<'a>(&'a self, _: &mut Headers<'a>) {}
 
-    fn read_request_body(&mut self, _: &mut [u8]) -> Result<usize, Self::Err> {
+    fn read_request_body(&mut self, _: &mut [u8]) -> Result<u64, Self::Err> {
         Ok(0)
     }
 
     /// Check if status line is an expected one. This function will not called for redirection if
     /// [`FollowLocation::follow_location`] is `true`.
+    ///
+    /// This method should allow all possible statuses that your application intended to handle.
     fn process_response_status(&mut self, line: &StatusLine) -> Result<(), Self::Err>;
 
     fn process_response_header(&mut self, _: &HeaderName, _: &str) -> Result<(), Self::Err> {
@@ -109,7 +114,7 @@ where
     fn new_invalid_response_header(&self, line: &[u8]) -> Self::Err;
     fn new_http_stack_error(&self, cause: ::curl::Error) -> Self::Err;
 
-    fn build_output(self) -> Result<Self::Output, Self::Err>;
+    fn build_output(self, status: StatusLine) -> Result<Self::Output, Self::Err>;
 }
 
 pub trait FollowLocation {

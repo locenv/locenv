@@ -46,6 +46,19 @@ pub fn follow_location(input: DeriveInput) -> syn::Result<TokenStream> {
     })
 }
 
+pub fn no_default_headers(input: DeriveInput) -> syn::Result<TokenStream> {
+    let name = &input.ident;
+    let generics = &input.generics;
+
+    Ok(quote! {
+        impl #generics kuro::DefaultHeaders for #name #generics {
+            fn default_request_headers<'a>(&self) -> kuro::Headers<'a> {
+                kuro::Headers::<'a>::default()
+            }
+        }
+    })
+}
+
 fn parse_kuro_arg_meta(meta: &Meta) -> syn::Result<KuroArg> {
     match meta {
         Meta::NameValue(p) => {

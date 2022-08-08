@@ -32,6 +32,7 @@ fn implement_http_request(input: DeriveInput) -> syn::Result<TokenStream> {
     let name = &input.ident;
     let matchers = parser.matchers();
     let methods = parser.methods();
+    let paths = parser.paths();
     let formats = parser.formats();
     let output = quote! {
         impl #name {
@@ -46,6 +47,12 @@ fn implement_http_request(input: DeriveInput) -> syn::Result<TokenStream> {
             pub fn method(&self) -> &'static http::method::Method {
                 match self {
                     #( #methods )*
+                }
+            }
+
+            pub fn path(&self) -> std::borrow::Cow<'static, str> {
+                match self {
+                    # ( #paths )*
                 }
             }
         }

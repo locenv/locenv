@@ -6,9 +6,12 @@ edition = "2021"
 [dependencies]
 clap = { version = "3.2", features = ["cargo"] }
 context = { path = "../context" }
+curl = "0.4"
 dirtree = { path = "../dirtree" }
 http = "0.2"
 kami = { path = "../kami" }
+kuro = { path = "../kuro" }
+kuro-macros = { path = "../kuro-macros" }
 module = { path = "../module" }
 percent-encoding = "2.1"
 reqmap-macros = { path = "../reqmap-macros" }

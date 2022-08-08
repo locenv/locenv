@@ -36,6 +36,12 @@ locenv up
 locenv mod install github:locenv/mod-autoconf
 ```
 
+### Stop running services
+
+```sh
+locenv stop
+```
+
 ### Update services to latest version
 
 ```sh

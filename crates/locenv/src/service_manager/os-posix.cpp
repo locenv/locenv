@@ -60,33 +60,35 @@ extern "C" uint8_t enter_daemon(const char *log, uint8_t (*daemon) (void *), voi
     // Close the original FD.
     close(fd);
 
-    // Create a new session and become a session leader.
-    if (setsid() < 0) {
-        auto c = errno;
-        std::stringstream m;
-
-        m << "Start new session failed: " << strerror(c);
-
-        throw std::runtime_error(m.str());
-    }
-
-    // Kill the current process so we are not running as a session leader so we cannot accidentally acquire a controlling terminal.
-    switch (fork()) {
-    case -1: // Error.
-        {
+    if (!getenv("LOCENV_DEBUG")) {
+        // Create a new session and become a session leader.
+        if (setsid() < 0) {
             auto c = errno;
             std::stringstream m;
 
-            m << "Fork failed: " << strerror(c);
+            m << "Start new session failed: " << strerror(c);
 
             throw std::runtime_error(m.str());
         }
-        break;
-    case 0: // We are in the child.
-        break;
-    default: // We are in the parent.
-        // Use exit instead of return otherwise Rust object will get destructed.
-        exit(SUCCESS);
+
+        // Kill the current process so we are not running as a session leader so we cannot accidentally acquire a controlling terminal.
+        switch (fork()) {
+        case -1: // Error.
+            {
+                auto c = errno;
+                std::stringstream m;
+
+                m << "Fork failed: " << strerror(c);
+
+                throw std::runtime_error(m.str());
+            }
+            break;
+        case 0: // We are in the child.
+            break;
+        default: // We are in the parent.
+            // Use exit instead of return otherwise Rust object will get destructed.
+            exit(SUCCESS);
+        }
     }
 
     // Block all signals.

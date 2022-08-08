@@ -5,6 +5,7 @@ use std::unreachable;
 
 mod module;
 mod pull;
+mod stop;
 mod up;
 
 struct Command {
@@ -28,6 +29,7 @@ pub fn run() -> u8 {
     let commands = [
         &self::module::COMMAND,
         &self::pull::COMMAND,
+        &self::stop::COMMAND,
         &self::up::COMMAND,
     ];
 

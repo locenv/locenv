@@ -84,8 +84,8 @@ impl Headers {
         } else if line.is_empty() {
             self.is_complete = true;
         } else if let Some(colon) = line.find(':') {
-            let name = &line[..colon];
-            let value = &line[(colon + 1)..];
+            let name = (&line[..colon]).trim();
+            let value = (&line[(colon + 1)..]).trim();
 
             if name.is_empty() || value.is_empty() {
                 return Err(HeaderError::Invalid);

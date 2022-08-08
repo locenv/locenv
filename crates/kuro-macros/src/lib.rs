@@ -21,3 +21,12 @@ pub fn derive_follow_location(input: TokenStream) -> TokenStream {
         .unwrap_or_else(Error::into_compile_error)
         .into()
 }
+
+#[proc_macro_derive(NoDefaultHeaders)]
+pub fn derive_no_default_headers(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+
+    general::no_default_headers(input)
+        .unwrap_or_else(Error::into_compile_error)
+        .into()
+}

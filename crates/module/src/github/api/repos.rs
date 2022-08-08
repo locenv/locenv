@@ -85,7 +85,7 @@ impl<'owner, 'repo> Endpoint for GetLatestRelease<'owner, 'repo> {
         GetLatestReleaseError::HttpStackFailed(cause)
     }
 
-    fn build_output(self) -> Result<Self::Output, Self::Err> {
+    fn build_output(self, _: StatusLine) -> Result<Self::Output, Self::Err> {
         serde_json::from_slice(&self.response)
             .map_err(|_| GetLatestReleaseError::InvalidContent(self.response))
     }
@@ -189,7 +189,7 @@ impl<'url> Endpoint for DownloadReleaseAsset<'url> {
         DownloadReleaseAssetError::HttpStackFailed(cause)
     }
 
-    fn build_output(self) -> Result<Self::Output, Self::Err> {
+    fn build_output(self, _: StatusLine) -> Result<Self::Output, Self::Err> {
         Ok(self.file)
     }
 }

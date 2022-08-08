@@ -11,6 +11,7 @@ mod pattern;
 pub struct RequestParser {
     matchers: Vec<TokenStream>,
     methods: Vec<TokenStream>,
+    paths: Vec<TokenStream>,
     formats: Vec<TokenStream>,
 }
 
@@ -19,6 +20,7 @@ impl RequestParser {
         Self {
             matchers: Vec::new(),
             methods: Vec::new(),
+            paths: Vec::new(),
             formats: Vec::new(),
         }
     }
@@ -29,6 +31,10 @@ impl RequestParser {
 
     pub fn methods(&self) -> &[TokenStream] {
         self.methods.as_ref()
+    }
+
+    pub fn paths(&self) -> &[TokenStream] {
+        self.paths.as_ref()
     }
 
     pub fn formats(&self) -> &[TokenStream] {
@@ -105,22 +111,37 @@ impl RequestParser {
             }
         });
 
-        // Build formatter.
-        self.formats.push({
-            // Build variant name.
-            let mut fields: Punctuated<Ident, Token![,]> = Punctuated::new();
+        // Build path and formatter.
+        let mut fields: Punctuated<Ident, Token![,]> = Punctuated::new();
 
-            for i in 0..params.len() {
-                fields.push(format_ident!("p{}", i));
-            }
+        for i in 0..params.len() {
+            fields.push(format_ident!("p{}", i));
+        }
 
-            let name = if fields.is_empty() {
-                quote! { #name }
+        let name = if fields.is_empty() {
+            quote! { #name }
+        } else {
+            quote! { #name(#fields) }
+        };
+
+        self.paths.push({
+            let pattern = &attr.pattern;
+            let path = if fields.is_empty() {
+                quote! {
+                    #pattern.into()
+                }
             } else {
-                quote! { #name(#fields) }
+                quote! {
+                    format!(#pattern, #fields).into()
+                }
             };
 
-            // Build display format.
+            quote! {
+                Self::#name => #path,
+            }
+        });
+
+        self.formats.push({
             let format = format!("{} {}", attr.method, attr.pattern);
             let mut args: Punctuated<TokenStream, Token![,]> = Punctuated::new();
 

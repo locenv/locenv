@@ -25,6 +25,10 @@ impl<'e, E: Endpoint> HandlerAdapter<'e, E> {
         }
     }
 
+    pub fn take_status(&mut self) -> StatusLine {
+        self.status.take().unwrap()
+    }
+
     pub fn take_error(&mut self) -> Option<E::Err> {
         self.error.take()
     }
@@ -40,7 +44,7 @@ impl<'e, E: Endpoint> Handler for HandlerAdapter<'e, E> {
             }
         };
 
-        Ok(count)
+        Ok(count as _)
     }
 
     fn header(&mut self, data: &[u8]) -> bool {
