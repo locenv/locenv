@@ -1,19 +1,11 @@
-use http::StatusCode;
-use kuro::json::JsonReader;
+use self::api::repos::{
+    DownloadReleaseAsset, DownloadReleaseAssetError, GetLatestRelease, GetLatestReleaseError,
+};
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::Seek;
 
-mod models;
-
-#[derive(Debug)]
-pub enum Error {
-    InvalidIdentifier,
-    ReadReleaseFailed(Box<dyn std::error::Error>),
-    GetReleaseFailed(StatusCode),
-    DeserializeReleaseFailed(Box<dyn std::error::Error>),
-    DownloadReleaseFailed(Box<dyn std::error::Error>),
-}
+mod api;
 
 pub fn get_latest_package(id: &str) -> Result<File, Error> {
     // Parse ID.
@@ -44,42 +36,17 @@ pub fn get_latest_package(id: &str) -> Result<File, Error> {
     let owner = owner.unwrap();
     let repo = buffer;
 
-    // GitHub required User-Agent to be set otherwise we will get 403.
-    let mut options = kuro::Options {
-        user_agent: Some("locenv"),
-        accept: None,
-    };
-
     // Get latest release.
-    let mut handler = JsonReader::new();
-    let url = format!(
-        "https://api.github.com/repos/{}/{}/releases/latest",
-        owner, repo
-    );
-
-    let status = match kuro::get(&url, Some(&options), &mut handler) {
+    let release = match kuro::execute(GetLatestRelease::new(&owner, &repo)) {
         Ok(r) => r,
-        Err(e) => return Err(Error::ReadReleaseFailed(e.into())),
-    };
-
-    if status != StatusCode::OK {
-        return Err(Error::GetReleaseFailed(status));
-    }
-
-    let release: models::Release = match handler.deserialize() {
-        Ok(r) => r,
-        Err(e) => return Err(Error::DeserializeReleaseFailed(e.into())),
+        Err(e) => return Err(Error::GetReleaseFailed(e)),
     };
 
     // Download release asset.
-    let mut asset = tempfile::tempfile().unwrap();
-    let mut handler = kuro::writer::Writer::new(&asset);
-
-    options.accept = Some("application/octet-stream");
-
-    if let Err(e) = kuro::get(&release.assets[0].url, Some(&options), &mut handler) {
-        return Err(Error::DownloadReleaseFailed(e.into()));
-    }
+    let mut asset = match kuro::execute(DownloadReleaseAsset::new(&release.assets[0].url)) {
+        Ok(r) => r,
+        Err(e) => return Err(Error::DownloadReleaseFailed(e)),
+    };
 
     // Reset file position before return.
     asset.rewind().unwrap();
@@ -87,21 +54,29 @@ pub fn get_latest_package(id: &str) -> Result<File, Error> {
     Ok(asset)
 }
 
-// Error
+#[derive(Debug)]
+pub enum Error {
+    InvalidIdentifier,
+    GetReleaseFailed(GetLatestReleaseError),
+    DownloadReleaseFailed(DownloadReleaseAssetError),
+}
 
-impl std::error::Error for Error {}
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::GetReleaseFailed(e) => Some(e),
+            Self::DownloadReleaseFailed(e) => Some(e),
+            _ => None,
+        }
+    }
+}
 
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            Error::InvalidIdentifier => write!(f, "Invalid repository identifier"),
-            Error::ReadReleaseFailed(e) | Error::DeserializeReleaseFailed(e) => {
-                write!(f, "Failed to read latest release: {}", e)
-            }
-            Error::GetReleaseFailed(c) => write!(f, "Failed to get latest release: {}", c),
-            Error::DownloadReleaseFailed(e) => {
-                write!(f, "Failed to download latest release: {}", e)
-            }
+            Self::InvalidIdentifier => f.write_str("invalid package identifier"),
+            Self::GetReleaseFailed(_) => f.write_str("get release failed"),
+            Self::DownloadReleaseFailed(_) => f.write_str("download release failed"),
         }
     }
 }

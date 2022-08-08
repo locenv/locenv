@@ -1,84 +1,123 @@
 use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 
 pub const APPLICATION_JSON: MediaType = MediaType {
-    r#type: Cow::Borrowed("application"),
-    subtype: Cow::Borrowed("json"),
+    t: Cow::Borrowed("application"),
+    s: Cow::Borrowed("json"),
 };
 
 // https://datatracker.ietf.org/doc/html/rfc2045#section-5
-#[derive(Eq, Debug)]
+#[derive(Debug, Eq)]
 pub struct MediaType<'t> {
-    r#type: Cow<'t, str>,
-    subtype: Cow<'t, str>,
+    t: Cow<'t, str>,
+    s: Cow<'t, str>,
+}
+
+impl<'t> MediaType<'t> {
+    pub fn to_owned(&self) -> MediaType<'static> {
+        MediaType::<'static> {
+            t: Cow::Owned(self.t.as_ref().into()),
+            s: Cow::Owned(self.s.as_ref().into()),
+        }
+    }
 }
 
 impl<'t> Hash for MediaType<'t> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.r#type.to_lowercase().hash(state);
-        self.subtype.to_lowercase().hash(state);
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        for c in self.t.chars().flat_map(|c| c.to_lowercase()) {
+            c.hash(state);
+        }
+
+        for c in self.s.chars().flat_map(|c| c.to_lowercase()) {
+            c.hash(state);
+        }
     }
 }
 
 impl<'t> PartialEq for MediaType<'t> {
     fn eq(&self, other: &Self) -> bool {
-        self.r#type.to_lowercase() == other.r#type.to_lowercase()
-            && self.subtype.to_lowercase() == other.subtype.to_lowercase()
+        // Compare type.
+        let mut r = other.t.chars();
+        for l in self.t.chars() {
+            match r.next() {
+                Some(r) => {
+                    if !l.to_lowercase().eq(r.to_lowercase()) {
+                        return false;
+                    }
+                }
+                None => return false,
+            }
+        }
+
+        // Compare subtype.
+        let mut r = other.s.chars();
+        for l in self.s.chars() {
+            match r.next() {
+                Some(r) => {
+                    if !l.to_lowercase().eq(r.to_lowercase()) {
+                        return false;
+                    }
+                }
+                None => return false,
+            }
+        }
+
+        true
     }
 }
 
 impl<'t> Display for MediaType<'t> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "{}/{}", self.r#type, self.subtype)
+        write!(f, "{}/{}", self.t, self.s)
     }
 }
 
-impl<'t> FromStr for MediaType<'t> {
-    type Err = MediaTypeError;
+impl FromStr for MediaType<'static> {
+    type Err = InvalidMediaType;
 
-    fn from_str(s: &str) -> Result<Self, MediaTypeError> {
+    fn from_str(s: &str) -> Result<Self, InvalidMediaType> {
         // Type.
         let i = match s.find('/') {
             Some(v) => v,
-            None => return Err(MediaTypeError::Malformed),
+            None => return Err(InvalidMediaType::Malformed),
         };
 
-        let r#type = &s[..i];
+        let t = &s[..i];
 
-        if r#type.is_empty() {
-            return Err(MediaTypeError::Malformed);
+        if t.is_empty() {
+            return Err(InvalidMediaType::Malformed);
         }
 
-        let remain = match s.get((i + 1)..) {
+        let s = match s.get((i + 1)..) {
             Some(v) if !v.is_empty() => v,
-            _ => return Err(MediaTypeError::Malformed),
+            _ => return Err(InvalidMediaType::Malformed),
         };
 
         // Subtype.
-        let subtype = match remain.find(';') {
+        let s = match s.find(';') {
             Some(i) => {
-                let t = &remain[..i];
+                let t = &s[..i];
 
                 if t.is_empty() {
-                    return Err(MediaTypeError::Malformed);
+                    return Err(InvalidMediaType::Malformed);
                 }
 
                 t
             }
-            None => remain,
+            None => s,
         };
 
         Ok(MediaType {
-            r#type: Cow::Owned(r#type.into()),
-            subtype: Cow::Owned(subtype.into()),
+            t: Cow::Owned(t.into()),
+            s: Cow::Owned(s.into()),
         })
     }
 }
 
 #[derive(Debug)]
-pub enum MediaTypeError {
+pub enum InvalidMediaType {
     Malformed,
     InvalidType,
     InvalidSubtype,

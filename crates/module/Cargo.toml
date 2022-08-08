@@ -5,12 +5,16 @@ edition = "2021"
 
 [dependencies]
 context = { path = "../context" }
+curl = "0.4"
 dirtree = { path = "../dirtree" }
 dirtree-macros = { path = "../dirtree-macros" }
 fs_extra = "1.2"
 http = "0.2"
 kuro = { path = "../kuro" }
+kuro-macros = { path = "../kuro-macros" }
+module-macros = { path = "../module-macros" }
 serde = "1.0"
+serde_json = "1.0"
 tempfile = "3.3"
 yaml = { path = "../yaml" }
 zip = "0.6"

@@ -524,6 +524,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "kuro-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -667,15 +676,28 @@ name = "module"
 version = "0.1.0"
 dependencies = [
  "context",
+ "curl",
  "dirtree",
  "dirtree-macros",
  "fs_extra",
  "http",
  "kuro",
+ "kuro-macros",
+ "module-macros",
  "serde",
+ "serde_json",
  "tempfile",
  "yaml",
  "zip",
+]
+
+[[package]]
+name = "module-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
